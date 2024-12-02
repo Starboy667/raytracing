@@ -1,0 +1,13 @@
+{
+  "version": 8,
+  "configurePresets": [
+    {
+      "name": "run",
+      "displayName": "Run",
+      "description": "Runs the project",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "build/",
+      "cacheVariables": {}
+    }
+  ]
+}
