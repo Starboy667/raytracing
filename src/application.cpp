@@ -560,6 +560,8 @@ void Application::Run() {
         // imgui, and hide them from your application based on those two flags.
         glfwPollEvents();
 
+        for (auto& view : _viewStack) view->Update(/*m_TimeStep*/);
+
         // Resize swap chain?
         int fb_width, fb_height;
         glfwGetFramebufferSize(_window, &fb_width, &fb_height);
@@ -679,6 +681,8 @@ void Application::Run() {
             //         ImGui::EndMenuBar();
             //     }
             // }
+            for (auto& view : _viewStack) view->Render();
+
             ImGui::End();
         }
 
