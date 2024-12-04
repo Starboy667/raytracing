@@ -1,8 +1,15 @@
 #include "application.hpp"
+#include "engine/engine.hpp"
 
-int main(int argc, char** argv) {
-    Application* app = CreateApplication(argc, argv);
-    app->Run();
-    delete app;
+int main() {
+    Application app(800, 600, "Raytracing");
+
+    try {
+        app.Run();
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return 1;
+    }
+
     return 0;
 }
