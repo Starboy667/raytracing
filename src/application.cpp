@@ -52,12 +52,21 @@ static ImGui_ImplVulkanH_Window g_MainWindowData;
 static int g_MinImageCount = 2;
 static bool g_SwapChainRebuild = false;
 
+static std::vector<std::vector<VkCommandBuffer>> _allocatedCommandBuffers;
+static std::vector<std::vector<std::function<void()>>> _resourceFreeQueue;
+
+static uint32_t _currentFrameIndex = 0;
+
 static void glfw_error_callback(int error, const char* description) {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
-static void check_vk_result(VkResult err) {
+void check_vk_result(VkResult err) {
     if (err == 0) return;
-    fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
+    fprintf(stderr, "[vulkan] Error: VkResult = %d at line %d\n", err,
+            __LINE__);
+    if (err == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+        fprintf(stderr, "Out of device memory error!\n");
+    }
     if (err < 0) abort();
 }
 
@@ -428,16 +437,79 @@ static void FramePresent(ImGui_ImplVulkanH_Window* wd) {
         wd->SemaphoreCount;  // Now we can use the next set of semaphores
 }
 
+VkDevice Application::GetDevice() { return g_Device; }
+
+VkPhysicalDevice Application::GetPhysicalDevice() { return g_PhysicalDevice; }
+
+VkCommandBuffer Application::GetCommandBuffer(bool begin) {
+    ImGui_ImplVulkanH_Window* wd = &g_MainWindowData;
+
+    // Use any command queue
+    VkCommandPool command_pool = wd->Frames[wd->FrameIndex].CommandPool;
+
+    VkCommandBufferAllocateInfo cmdBufAllocateInfo = {};
+    cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmdBufAllocateInfo.commandPool = command_pool;
+    cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmdBufAllocateInfo.commandBufferCount = 1;
+
+    VkCommandBuffer& command_buffer =
+        _allocatedCommandBuffers[wd->FrameIndex].emplace_back();
+    auto err = vkAllocateCommandBuffers(g_Device, &cmdBufAllocateInfo,
+                                        &command_buffer);
+
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    err = vkBeginCommandBuffer(command_buffer, &begin_info);
+    check_vk_result(err);
+
+    return command_buffer;
+}
+
+void Application::FlushCommandBuffer(VkCommandBuffer commandBuffer) {
+    const uint64_t DEFAULT_FENCE_TIMEOUT = 100000000000;
+
+    VkSubmitInfo end_info = {};
+    end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    end_info.commandBufferCount = 1;
+    end_info.pCommandBuffers = &commandBuffer;
+    auto err = vkEndCommandBuffer(commandBuffer);
+    check_vk_result(err);
+
+    // Create fence to ensure that the command buffer has finished executing
+    VkFenceCreateInfo fenceCreateInfo = {};
+    fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceCreateInfo.flags = 0;
+    VkFence fence;
+    err = vkCreateFence(g_Device, &fenceCreateInfo, nullptr, &fence);
+    check_vk_result(err);
+
+    err = vkQueueSubmit(g_Queue, 1, &end_info, fence);
+    check_vk_result(err);
+
+    err = vkWaitForFences(g_Device, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT);
+    check_vk_result(err);
+
+    vkDestroyFence(g_Device, fence, nullptr);
+}
+
+void Application::SubmitResourceFree(std::function<void()>&& func) {
+    _resourceFreeQueue[_currentFrameIndex].emplace_back(func);
+}
+
 int Application::Init() {
-    printf("Application::Init\n");
     glfwSetErrorCallback(glfw_error_callback);
-    if (!glfwInit()) return 1;
+    if (!glfwInit()) {
+        std::cerr << "Could not initalize GLFW!\n";
+        return 1;
+    }
 
     // Create window with Vulkan context
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     _window = glfwCreateWindow(1280, 720, "Raytracer", nullptr, nullptr);
     if (!glfwVulkanSupported()) {
-        printf("GLFW: Vulkan Not Supported\n");
+        std::cerr << "GLFW: Vulkan not supported!\n";
         return 1;
     }
 
@@ -460,6 +532,8 @@ int Application::Init() {
     glfwGetFramebufferSize(_window, &w, &h);
     ImGui_ImplVulkanH_Window* _wd = &g_MainWindowData;
     SetupVulkanWindow(_wd, surface, w, h);
+    _allocatedCommandBuffers.resize(_wd->ImageCount);
+    _resourceFreeQueue.resize(_wd->ImageCount);
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -563,22 +637,23 @@ void Application::Run() {
         for (auto& view : _viewStack) view->Update(/*m_TimeStep*/);
 
         // Resize swap chain?
-        int fb_width, fb_height;
-        glfwGetFramebufferSize(_window, &fb_width, &fb_height);
-        if (fb_width > 0 && fb_height > 0 &&
-            (g_SwapChainRebuild || g_MainWindowData.Width != fb_width ||
-             g_MainWindowData.Height != fb_height)) {
-            ImGui_ImplVulkan_SetMinImageCount(g_MinImageCount);
-            ImGui_ImplVulkanH_CreateOrResizeWindow(
-                g_Instance, g_PhysicalDevice, g_Device, &g_MainWindowData,
-                g_QueueFamily, g_Allocator, fb_width, fb_height,
-                g_MinImageCount);
-            g_MainWindowData.FrameIndex = 0;
-            g_SwapChainRebuild = false;
-        }
-        if (glfwGetWindowAttrib(_window, GLFW_ICONIFIED) != 0) {
-            ImGui_ImplGlfw_Sleep(10);
-            continue;
+        if (g_SwapChainRebuild) {
+            int width, height;
+            glfwGetFramebufferSize(_window, &width, &height);
+            if (width > 0 && height > 0) {
+                ImGui_ImplVulkan_SetMinImageCount(g_MinImageCount);
+                ImGui_ImplVulkanH_CreateOrResizeWindow(
+                    g_Instance, g_PhysicalDevice, g_Device, &g_MainWindowData,
+                    g_QueueFamily, g_Allocator, width, height, g_MinImageCount);
+                g_MainWindowData.FrameIndex = 0;
+
+                // Clear allocated command buffers from here since entire pool
+                // is destroyed
+                _allocatedCommandBuffers.clear();
+                _allocatedCommandBuffers.resize(g_MainWindowData.ImageCount);
+
+                g_SwapChainRebuild = false;
+            }
         }
 
         // Start the Dear ImGui frame
@@ -627,10 +702,12 @@ void Application::Run() {
                 ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f),
                                  dockspace_flags);
             }
+            for (auto& view : _viewStack) view->RenderUI();
+
             ImGui::End();
-            static float f = 0.0f;
-            static int counter = 0;
-            {
+            // static float f = 0.0f;
+            // static int counter = 0;
+            /*{
                 ImGui::Begin(
                     "Hello, world!");  // Create a window called "Hello,
                                        // world!" and append into it.
@@ -674,16 +751,15 @@ void Application::Run() {
                     "%.3f ms/frame (%.1f "
                     "FPS)",
                     1000.0f / _io.Framerate, _io.Framerate);
-            }
+            }*/
             // if (m_MenubarCallback) {
             //     if (ImGui::BeginMenuBar()) {
             //         m_MenubarCallback();
             //         ImGui::EndMenuBar();
             //     }
             // }
-            for (auto& view : _viewStack) view->Render();
 
-            ImGui::End();
+            // ImGui::End();
         }
 
         // 3. Show another simple window.

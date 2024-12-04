@@ -51,6 +51,9 @@ target_include_directories(glfw INTERFACE ${GLFW_DIR}/include)
 set(IMGUI_DIR ../../)
 include_directories(${IMGUI_DIR} ${IMGUI_DIR}/backends ..)
 
+# STB
+include_directories(${PROJECT_SOURCE_DIR}/lib/stb)
+
 # Libraries
 find_package(Vulkan REQUIRED)
 include_directories(${Vulkan_INCLUDE_DIRS})
