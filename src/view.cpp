@@ -12,8 +12,8 @@ class Viewport : public View {
                 Render();
             }
             ImGui::End();
-            // ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-            //                     ImVec2(0.0f, 0.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                                ImVec2(0.0f, 0.0f));
             ImGui::Begin("Viewport");
             // display image
             _viewPortWidth =
@@ -27,7 +27,7 @@ class Viewport : public View {
                     {(float)_image->GetWidth(), (float)_image->GetHeight()});
             }
             ImGui::End();
-            // ImGui::PopStyleVar();
+            ImGui::PopStyleVar();
         }
     }
 

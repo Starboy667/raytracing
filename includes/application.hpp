@@ -34,7 +34,7 @@ class Application {
     static void SubmitResourceFree(std::function<void()>&& func);
 
    private:
-    int Init();
+    void Init();
     void Shutdown();
 
    private:

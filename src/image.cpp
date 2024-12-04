@@ -74,7 +74,6 @@ void Image::Release() {
 
 void Image::AllocateMemory(uint64_t size) {
     {
-        printf("Allocating memory for image...\n");
         VkDevice device = Application::GetDevice();
 
         VkResult err;
@@ -148,7 +147,6 @@ void Image::AllocateMemory(uint64_t size) {
         _descriptorSet = (VkDescriptorSet)ImGui_ImplVulkan_AddTexture(
             _sampler, _imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
-    printf("Created image with descriptor set: %p\n", _descriptorSet);
 }
 
 void Image::SendData(const void* data) {

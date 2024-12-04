@@ -122,66 +122,43 @@ static VkPhysicalDevice SetupVulkan_SelectPhysicalDevice() {
     return VK_NULL_HANDLE;
 }
 
-static void SetupVulkan(ImVector<const char*> instance_extensions) {
+static void SetupVulkan(const char** extensions, uint32_t extensions_count) {
     VkResult err;
-#ifdef IMGUI_IMPL_VULKAN_USE_VOLK
-    volkInitialize();
-#endif
 
     // Create Vulkan Instance
     {
         VkInstanceCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-
-        // Enumerate available extensions
-        uint32_t properties_count;
-        ImVector<VkExtensionProperties> properties;
-        vkEnumerateInstanceExtensionProperties(nullptr, &properties_count,
-                                               nullptr);
-        properties.resize(properties_count);
-        err = vkEnumerateInstanceExtensionProperties(nullptr, &properties_count,
-                                                     properties.Data);
-        check_vk_result(err);
-
-        // Enable required extensions
-        if (IsExtensionAvailable(
-                properties,
-                VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME))
-            instance_extensions.push_back(
-                VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-#ifdef VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME
-        if (IsExtensionAvailable(
-                properties, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)) {
-            instance_extensions.push_back(
-                VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-            create_info.flags |=
-                VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-        }
-#endif
-
+        create_info.enabledExtensionCount = extensions_count;
+        create_info.ppEnabledExtensionNames = extensions;
+#ifdef IMGUI_VULKAN_DEBUG_REPORT
         // Enabling validation layers
-#ifdef APP_USE_VULKAN_DEBUG_REPORT
         const char* layers[] = {"VK_LAYER_KHRONOS_validation"};
         create_info.enabledLayerCount = 1;
         create_info.ppEnabledLayerNames = layers;
-        instance_extensions.push_back("VK_EXT_debug_report");
-#endif
+
+        // Enable debug report extension (we need additional storage, so we
+        // duplicate the user array to add our new extension to it)
+        const char** extensions_ext =
+            (const char**)malloc(sizeof(const char*) * (extensions_count + 1));
+        memcpy(extensions_ext, extensions,
+               extensions_count * sizeof(const char*));
+        extensions_ext[extensions_count] = "VK_EXT_debug_report";
+        create_info.enabledExtensionCount = extensions_count + 1;
+        create_info.ppEnabledExtensionNames = extensions_ext;
 
         // Create Vulkan Instance
-        create_info.enabledExtensionCount = (uint32_t)instance_extensions.Size;
-        create_info.ppEnabledExtensionNames = instance_extensions.Data;
         err = vkCreateInstance(&create_info, g_Allocator, &g_Instance);
         check_vk_result(err);
-#ifdef IMGUI_IMPL_VULKAN_USE_VOLK
-        volkLoadInstance(g_Instance);
-#endif
+        free(extensions_ext);
 
-        // Setup the debug report callback
-#ifdef APP_USE_VULKAN_DEBUG_REPORT
-        auto f_vkCreateDebugReportCallbackEXT =
+        // Get the function pointer (required for any extensions)
+        auto vkCreateDebugReportCallbackEXT =
             (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(
                 g_Instance, "vkCreateDebugReportCallbackEXT");
-        IM_ASSERT(f_vkCreateDebugReportCallbackEXT != nullptr);
+        IM_ASSERT(vkCreateDebugReportCallbackEXT != NULL);
+
+        // Setup the debug report callback
         VkDebugReportCallbackCreateInfoEXT debug_report_ci = {};
         debug_report_ci.sType =
             VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -189,21 +166,53 @@ static void SetupVulkan(ImVector<const char*> instance_extensions) {
                                 VK_DEBUG_REPORT_WARNING_BIT_EXT |
                                 VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
         debug_report_ci.pfnCallback = debug_report;
-        debug_report_ci.pUserData = nullptr;
-        err = f_vkCreateDebugReportCallbackEXT(g_Instance, &debug_report_ci,
-                                               g_Allocator, &g_DebugReport);
+        debug_report_ci.pUserData = NULL;
+        err = vkCreateDebugReportCallbackEXT(g_Instance, &debug_report_ci,
+                                             g_Allocator, &g_DebugReport);
         check_vk_result(err);
+#else
+        // Create Vulkan Instance without any debug feature
+        err = vkCreateInstance(&create_info, g_Allocator, &g_Instance);
+        check_vk_result(err);
+        IM_UNUSED(g_DebugReport);
 #endif
     }
 
-    // Select Physical Device (GPU)
-    g_PhysicalDevice = SetupVulkan_SelectPhysicalDevice();
+    // Select GPU
+    {
+        uint32_t gpu_count;
+        err = vkEnumeratePhysicalDevices(g_Instance, &gpu_count, NULL);
+        check_vk_result(err);
+        IM_ASSERT(gpu_count > 0);
+
+        VkPhysicalDevice* gpus =
+            (VkPhysicalDevice*)malloc(sizeof(VkPhysicalDevice) * gpu_count);
+        err = vkEnumeratePhysicalDevices(g_Instance, &gpu_count, gpus);
+        check_vk_result(err);
+
+        // If a number >1 of GPUs got reported, find discrete GPU if present, or
+        // use first one available. This covers most common cases
+        // (multi-gpu/integrated+dedicated graphics). Handling more complicated
+        // setups (multiple dedicated GPUs) is out of scope of this sample.
+        int use_gpu = 0;
+        for (int i = 0; i < (int)gpu_count; i++) {
+            VkPhysicalDeviceProperties properties;
+            vkGetPhysicalDeviceProperties(gpus[i], &properties);
+            if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+                use_gpu = i;
+                break;
+            }
+        }
+
+        g_PhysicalDevice = gpus[use_gpu];
+        free(gpus);
+    }
 
     // Select graphics queue family
     {
         uint32_t count;
         vkGetPhysicalDeviceQueueFamilyProperties(g_PhysicalDevice, &count,
-                                                 nullptr);
+                                                 NULL);
         VkQueueFamilyProperties* queues = (VkQueueFamilyProperties*)malloc(
             sizeof(VkQueueFamilyProperties) * count);
         vkGetPhysicalDeviceQueueFamilyProperties(g_PhysicalDevice, &count,
@@ -219,24 +228,8 @@ static void SetupVulkan(ImVector<const char*> instance_extensions) {
 
     // Create Logical Device (with 1 queue)
     {
-        ImVector<const char*> device_extensions;
-        device_extensions.push_back("VK_KHR_swapchain");
-
-        // Enumerate physical device extension
-        uint32_t properties_count;
-        ImVector<VkExtensionProperties> properties;
-        vkEnumerateDeviceExtensionProperties(g_PhysicalDevice, nullptr,
-                                             &properties_count, nullptr);
-        properties.resize(properties_count);
-        vkEnumerateDeviceExtensionProperties(
-            g_PhysicalDevice, nullptr, &properties_count, properties.Data);
-#ifdef VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
-        if (IsExtensionAvailable(properties,
-                                 VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME))
-            device_extensions.push_back(
-                VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
-#endif
-
+        int device_extension_count = 1;
+        const char* device_extensions[] = {"VK_KHR_swapchain"};
         const float queue_priority[] = {1.0f};
         VkDeviceQueueCreateInfo queue_info[1] = {};
         queue_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -248,8 +241,8 @@ static void SetupVulkan(ImVector<const char*> instance_extensions) {
         create_info.queueCreateInfoCount =
             sizeof(queue_info) / sizeof(queue_info[0]);
         create_info.pQueueCreateInfos = queue_info;
-        create_info.enabledExtensionCount = (uint32_t)device_extensions.Size;
-        create_info.ppEnabledExtensionNames = device_extensions.Data;
+        create_info.enabledExtensionCount = device_extension_count;
+        create_info.ppEnabledExtensionNames = device_extensions;
         err = vkCreateDevice(g_PhysicalDevice, &create_info, g_Allocator,
                              &g_Device);
         check_vk_result(err);
@@ -257,17 +250,23 @@ static void SetupVulkan(ImVector<const char*> instance_extensions) {
     }
 
     // Create Descriptor Pool
-    // The example only requires a single combined image sampler descriptor for
-    // the font image and only uses one descriptor set (for that) If you wish to
-    // load e.g. additional textures you may need to alter pools sizes.
     {
         VkDescriptorPoolSize pool_sizes[] = {
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
-        };
+            {VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+            {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
         VkDescriptorPoolCreateInfo pool_info = {};
         pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        pool_info.maxSets = 1;
+        pool_info.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
         pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
         pool_info.pPoolSizes = pool_sizes;
         err = vkCreateDescriptorPool(g_Device, &pool_info, g_Allocator,
@@ -498,54 +497,53 @@ void Application::SubmitResourceFree(std::function<void()>&& func) {
     _resourceFreeQueue[_currentFrameIndex].emplace_back(func);
 }
 
-int Application::Init() {
+void Application::Init() {
+    // Setup GLFW window
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit()) {
         std::cerr << "Could not initalize GLFW!\n";
-        return 1;
+        return;
     }
 
-    // Create window with Vulkan context
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    _window = glfwCreateWindow(1280, 720, "Raytracer", nullptr, nullptr);
+    _window = glfwCreateWindow(1280, 720, "Raytracer", NULL, NULL);
+
+    // Setup Vulkan
     if (!glfwVulkanSupported()) {
         std::cerr << "GLFW: Vulkan not supported!\n";
-        return 1;
+        return;
     }
-
-    ImVector<const char*> extensions;
     uint32_t extensions_count = 0;
-    const char** glfw_extensions =
+    const char** extensions =
         glfwGetRequiredInstanceExtensions(&extensions_count);
-    for (uint32_t i = 0; i < extensions_count; i++)
-        extensions.push_back(glfw_extensions[i]);
-    SetupVulkan(extensions);
+    SetupVulkan(extensions, extensions_count);
 
     // Create Window Surface
     VkSurfaceKHR surface;
-    VkResult _err =
+    VkResult err =
         glfwCreateWindowSurface(g_Instance, _window, g_Allocator, &surface);
-    check_vk_result(_err);
+    check_vk_result(err);
 
     // Create Framebuffers
     int w, h;
     glfwGetFramebufferSize(_window, &w, &h);
-    ImGui_ImplVulkanH_Window* _wd = &g_MainWindowData;
-    SetupVulkanWindow(_wd, surface, w, h);
-    _allocatedCommandBuffers.resize(_wd->ImageCount);
-    _resourceFreeQueue.resize(_wd->ImageCount);
+    ImGui_ImplVulkanH_Window* wd = &g_MainWindowData;
+    SetupVulkanWindow(wd, surface, w, h);
+
+    _allocatedCommandBuffers.resize(wd->ImageCount);
+    _resourceFreeQueue.resize(wd->ImageCount);
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& _io = ImGui::GetIO();
-    (void)_io;
-    _io.ConfigFlags |=
+    ImGuiIO& io = ImGui::GetIO();
+    (void)io;
+    io.ConfigFlags |=
         ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-    // _io.ConfigFlags |=
-    //     ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
-    _io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;  // Enable Docking
-    _io.ConfigFlags |=
+    // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable
+    // Gamepad Controls
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;  // Enable Docking
+    io.ConfigFlags |=
         ImGuiConfigFlags_ViewportsEnable;  // Enable Multi-Viewport / Platform
                                            // Windows
     // io.ConfigViewportsNoAutoMerge = true;
@@ -553,12 +551,12 @@ int Application::Init() {
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    // ImGui::StyleColorsLight();
+    // ImGui::StyleColorsClassic();
 
     // When viewports are enabled we tweak WindowRounding/WindowBg so platform
     // windows can look identical to regular ones.
     ImGuiStyle& style = ImGui::GetStyle();
-    if (_io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         style.WindowRounding = 0.0f;
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
     }
@@ -573,46 +571,52 @@ int Application::Init() {
     init_info.Queue = g_Queue;
     init_info.PipelineCache = g_PipelineCache;
     init_info.DescriptorPool = g_DescriptorPool;
-    init_info.RenderPass = _wd->RenderPass;
+    init_info.RenderPass = wd->RenderPass;
     init_info.Subpass = 0;
     init_info.MinImageCount = g_MinImageCount;
-    init_info.ImageCount = _wd->ImageCount;
+    init_info.ImageCount = wd->ImageCount;
     init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
     init_info.Allocator = g_Allocator;
     init_info.CheckVkResultFn = check_vk_result;
-    ImGui_ImplVulkan_Init(&init_info);
+    ImGui_ImplVulkan_Init(&init_info /*,wd->RenderPass*/);
 
-    // Load Fonts
-    // - If no fonts are loaded, dear imgui will use the default font. You can
-    // also load multiple fonts and use ImGui::PushFont()/PopFont() to select
-    // them.
-    // - AddFontFromFileTTF() will return the ImFont* so you can store it if you
-    // need to select the font among multiple.
-    // - If the file cannot be loaded, the function will return a nullptr.
-    // Please handle those errors in your application (e.g. use an assertion, or
-    // display an error and quit).
-    // - The fonts will be rasterized at a given size (w/ oversampling) and
-    // stored into a texture when calling
-    // ImFontAtlas::Build()/GetTexDataAsXXXX(), which ImGui_ImplXXXX_NewFrame
-    // below will call.
-    // - Use '#define IMGUI_ENABLE_FREETYPE' in your imconfig file to use
-    // Freetype for higher quality font rendering.
-    // - Read 'docs/FONTS.md' for more instructions and details.
-    // - Remember that in C/C++ if you want to include a backslash \ in a string
-    // literal you need to write a double backslash \\ !
-    // io.Fonts->AddFontDefault();
-    // io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", 18.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
-    // ImFont* font =
-    // io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f,
-    // nullptr, io.Fonts->GetGlyphRangesJapanese()); IM_ASSERT(font != nullptr);
+    // Load default font
+    // ImFontConfig fontConfig;
+    // fontConfig.FontDataOwnedByAtlas = false;
+    // ImFont* robotoFont = io.Fonts->AddFontFromMemoryTTF(
+    //     (void*)g_RobotoRegular, sizeof(g_RobotoRegular), 20.0f, &fontConfig);
+    // io.FontDefault = robotoFont;
 
-    // Our state
-    bool show_demo_window = false;
-    bool show_another_window = false;
-    return 0;
+    // // Upload Fonts
+    // {
+    //     // Use any command queue
+    //     VkCommandPool command_pool = wd->Frames[wd->FrameIndex].CommandPool;
+    //     VkCommandBuffer command_buffer =
+    //         wd->Frames[wd->FrameIndex].CommandBuffer;
+
+    //     err = vkResetCommandPool(g_Device, command_pool, 0);
+    //     check_vk_result(err);
+    //     VkCommandBufferBeginInfo begin_info = {};
+    //     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    //     begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    //     err = vkBeginCommandBuffer(command_buffer, &begin_info);
+    //     check_vk_result(err);
+
+    //     ImGui_ImplVulkan_CreateFontsTexture(command_buffer);
+
+    //     VkSubmitInfo end_info = {};
+    //     end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    //     end_info.commandBufferCount = 1;
+    //     end_info.pCommandBuffers = &command_buffer;
+    //     err = vkEndCommandBuffer(command_buffer);
+    //     check_vk_result(err);
+    //     err = vkQueueSubmit(g_Queue, 1, &end_info, VK_NULL_HANDLE);
+    //     check_vk_result(err);
+
+    //     err = vkDeviceWaitIdle(g_Device);
+    //     check_vk_result(err);
+    //     ImGui_ImplVulkan_DestroyFontUploadObjects();
+    // }
 }
 
 void Application::Run() {
