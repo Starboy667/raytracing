@@ -28,5 +28,8 @@ class Application {
 
    private:
     GLFWwindow* _window;
+    uint32_t currentFrame = 0;
+    float lastFrameTime = 0.0f;
+    double lastTime = 0.0f;
 };
 Application CreateApplication(int argc, char** argv);

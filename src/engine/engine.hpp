@@ -13,6 +13,7 @@
 #include <iostream>
 #include <limits>
 #include <optional>
+#include <random>
 #include <set>
 #include <stdexcept>
 #include <vector>
@@ -58,11 +59,12 @@ inline void DestroyDebugUtilsMessengerEXT(
 }
 
 struct QueueFamilyIndices {
-    std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> graphicsAndComputeFamily;
     std::optional<uint32_t> presentFamily;
 
     bool isComplete() {
-        return graphicsFamily.has_value() && presentFamily.has_value();
+        return graphicsAndComputeFamily.has_value() &&
+               presentFamily.has_value();
     }
 };
 
@@ -103,15 +105,56 @@ struct Vertex {
     }
 };
 
-const std::vector<Vertex> vertices = {{{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-                                      {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-                                      {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+// const std::vector<Vertex> vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+//                                       {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+//                                       {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+//                                       {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
+
+// const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
+
+struct UniformBufferObject {
+    float deltaTime = 1.0f;
+};
+
+const uint32_t PARTICLE_COUNT = 8192;
+struct Particle {
+    glm::vec2 position;
+    glm::vec2 velocity;
+    glm::vec4 color;
+
+    static VkVertexInputBindingDescription getBindingDescription() {
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Particle);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        return bindingDescription;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2>
+    getAttributeDescriptions() {
+        std::array<VkVertexInputAttributeDescription, 2>
+            attributeDescriptions{};
+
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attributeDescriptions[0].offset = offsetof(Particle, position);
+
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Particle, color);
+
+        return attributeDescriptions;
+    }
+};
 
 class Engine {
    public:
     Engine(uint32_t width, uint32_t height, GLFWwindow* window);
     ~Engine() { cleanup(); };
-    void render();
+    void render(float deltaTime);
     void SetFramebufferResized(bool resized) { framebufferResized = resized; }
 
    private:
@@ -124,15 +167,30 @@ class Engine {
     void createSwapChain();
     void createImageViews();
     void createRenderPass();
+    void createComputeDescriptorSetLayout();
     void createGraphicsPipeline();
+    void createComputePipeline();
     void createFramebuffers();
     void createCommandPool();
-    void createVertexBuffer();
+    // void createVertexBuffer();
+    // void createIndexBuffer();
+    void createShaderStorageBuffer();
+    void createUniformBuffers();
+    void createDescriptorPool();
+    void createComputeDescriptorSets();
     void createCommandBuffers();
     void createSyncObjects();
+    void createComputeCommandBuffers();
 
+    void recordComputeCommandBuffer(VkCommandBuffer commandBuffer);
+    void updateUniformBuffer(uint32_t currentImage);
     void cleanupSwapChain();
     void cleanup();
+
+    void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+                      VkMemoryPropertyFlags properties, VkBuffer& buffer,
+                      VkDeviceMemory& bufferMemory);
+    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
     void populateDebugMessengerCreateInfo(
         VkDebugUtilsMessengerCreateInfoEXT& createInfo);
@@ -196,6 +254,7 @@ class Engine {
 
     // queue
     VkQueue graphicsQueue;
+    VkQueue computeQueue;
     VkQueue presentQueue;
 
     // swap chain
@@ -211,20 +270,46 @@ class Engine {
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
 
-    // command
+    // compute
+    VkDescriptorSetLayout computeDescriptorSetLayout;
+    VkPipelineLayout computePipelineLayout;
+    VkPipeline computePipeline;
+
     VkCommandPool commandPool;
+
+    // shader storage buffer
+    std::vector<VkBuffer> shaderStorageBuffers;
+    std::vector<VkDeviceMemory> shaderStorageBuffersMemory;
+
+    std::vector<VkBuffer> uniformBuffers;
+    std::vector<VkDeviceMemory> uniformBuffersMemory;
+    std::vector<void*> uniformBuffersMapped;
+
+    // command
     std::vector<VkCommandBuffer> commandBuffers;
+    std::vector<VkCommandBuffer> computeCommandBuffers;
 
     // vertex
     VkBuffer vertexBuffer;
-    // std::vector<Vertex> vertices;
     VkDeviceMemory vertexBufferMemory;
+
+    VkBuffer indexBuffer;
+    VkDeviceMemory indexBufferMemory;
+
+    // descriptor
+    VkDescriptorPool descriptorPool;
+    std::vector<VkDescriptorSet> computeDescriptorSets;
 
     // sync
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;
+    std::vector<VkSemaphore> computeFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
+    std::vector<VkFence> computeInFlightFences;
+
     uint32_t currentFrame = 0;
+    float lastFrameTime = 0.0f;
 
     bool framebufferResized = false;
+    double lastTime = 0.0f;
 };

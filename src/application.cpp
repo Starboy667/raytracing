@@ -10,8 +10,11 @@ Application::~Application() {}
 void Application::Run() {
     while (!glfwWindowShouldClose(_window)) {
         glfwPollEvents();
-        _engine->render();
+        _engine->render(lastFrameTime);
         // calculateFrameRate();
+        double currentTime = glfwGetTime();
+        lastFrameTime = (currentTime - lastTime) * 1000.0;
+        lastTime = currentTime;
     }
 }
 
