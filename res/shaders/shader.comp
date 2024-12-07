@@ -8,6 +8,11 @@ struct Sphere {
     vec3 color;
 };
 
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+};
+
 struct Camera {
     vec3 position;
     vec3 forwards;
@@ -15,21 +20,41 @@ struct Camera {
     vec3 up;
 };
 
-struct Ray {
-    vec3 origin;
-    vec3 direction;
-};
+float hit(Ray ray, Sphere sphere) {
+    vec3 oc = sphere.center - ray.origin; 
+    float a = pow(length(ray.direction), 2);
+    float h = dot(oc, ray.direction);
+    float c = pow(length(oc), 2) - sphere.radius * sphere.radius;
+    float discriminant = h * h - a * c;
+    if (discriminant < 0) {
+        return -1.0;
+    } else {
+        return (h - sqrt(discriminant) ) / a;
+    }
+}
 
-bool hit(Ray ray, Sphere sphere);
+vec3 get_color(Ray ray, Sphere sphere) {
+    float t = hit(ray, sphere);
+    if (t > 0) {
+        vec3 N = normalize(ray.origin + t * ray.direction - sphere.center);
+        return 0.5 * (N + 1.0);
+    }
+    // background color
+    // return vec3(0.0, 0.250, 0.250);
+    vec3 unit_direction = normalize(ray.direction);
+    float a = 0.5 * (unit_direction.y + 1.0);
+    return (1.0 - a) * vec3(1.0) + a * vec3(0.5, 0.7, 1.0);
+}
+
 
 void main() {
-
+    // x.y = pixel position
     ivec2 screen_pos = ivec2(gl_GlobalInvocationID.xy);
     ivec2 screen_size = imageSize(colorBuffer);
+
+    // map pixel position to -1 to 1 so we can use it to calculate the ray direction
     float horizontalCoefficient = ((float(screen_pos.x) * 2 - screen_size.x) / screen_size.x);
     float verticalCoefficient = ((float(screen_pos.y) * 2 - screen_size.y) / screen_size.x);
-
-    vec3 pixel_color = vec3(0.5, 0.0, 0.25);
 
     Camera camera;
     camera.position = vec3(0.0);
@@ -37,28 +62,14 @@ void main() {
     camera.right = vec3(0.0, 1.0, 0.0);
     camera.up = vec3(0.0, 0.0, 1.0);
 
+    Ray ray;
+    ray.origin = camera.position;
+    ray.direction = camera.forwards + horizontalCoefficient * camera.right + verticalCoefficient * camera.up;
+
     Sphere sphere;
     sphere.center = vec3(3.0, 0.0, 0.0);
     sphere.radius = 1.0;
     sphere.color = vec3(1.0, 0.3, 0.7);
 
-    Ray ray;
-    ray.origin = camera.position;
-    ray.direction = camera.forwards + horizontalCoefficient * camera.right + verticalCoefficient * camera.up;
-
-    if (hit(ray, sphere)) {
-        pixel_color = vec3(0.5, 1.0, 0.75);
-    }
-
-    imageStore(colorBuffer, screen_pos, vec4(pixel_color, 1.0));
-}
-
-bool hit(Ray ray, Sphere sphere) {
-    
-    float a = dot(ray.direction, ray.direction);
-    float b = 2.0 * dot(ray.direction, ray.origin - sphere.center);
-    float c = dot(ray.origin - sphere.center, ray.origin - sphere.center) - sphere.radius * sphere.radius;
-    float discriminant = b * b - 4.0 * a * c;
-
-    return discriminant > 0;
+    imageStore(colorBuffer, screen_pos, vec4(get_color(ray, sphere), 1.0));
 }
