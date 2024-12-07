@@ -42,20 +42,15 @@ void Engine::createGraphicsPipeline() {
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType =
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-    auto bindingDescription = Particle::getBindingDescription();
-    auto attributeDescriptions = Particle::getAttributeDescriptions();
-
-    vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.vertexAttributeDescriptionCount =
-        static_cast<uint32_t>(attributeDescriptions.size());
-    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+    vertexInputInfo.vertexBindingDescriptionCount = 0;
+    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+    vertexInputInfo.pVertexBindingDescriptions = nullptr;
+    vertexInputInfo.pVertexAttributeDescriptions = nullptr;
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType =
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     VkPipelineViewportStateCreateInfo viewportState{};
@@ -157,7 +152,7 @@ void Engine::createFramebuffers() {
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = renderPass;
+        framebufferInfo.renderPass = VK_NULL_HANDLE;
         framebufferInfo.attachmentCount = 1;
         framebufferInfo.pAttachments = attachments;
         framebufferInfo.width = swapChainExtent.width;
@@ -250,94 +245,13 @@ void Engine::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer,
     vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
 
-// void Engine::createVertexBuffer() {
-//     VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-//     VkBuffer stagingBuffer;
-//     VkDeviceMemory stagingBufferMemory;
-//     // source buffer
-//     createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-//                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-//                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-//                  stagingBuffer, stagingBufferMemory);
-
-//     void* data;
-//     vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-//     memcpy(data, vertices.data(), (size_t)bufferSize);
-//     vkUnmapMemory(device, stagingBufferMemory);
-
-//     // destination buffer
-//     createBuffer(
-//         bufferSize,
-//         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-//         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer,
-//         vertexBufferMemory);
-
-//     // copy from staging buffer to destination buffer
-//     copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
-//     vkDestroyBuffer(device, stagingBuffer, nullptr);
-//     vkFreeMemory(device, stagingBufferMemory, nullptr);
-// }
-
-void Engine::updateUniformBuffer(uint32_t currentImage) {
-    UniformBufferObject ubo{};
-    ubo.deltaTime = lastFrameTime * 2.0f;
-
-    memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
-}
-
-void Engine::recordComputeCommandBuffer(VkCommandBuffer commandBuffer) {
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-        throw std::runtime_error(
-            "failed to begin recording compute command buffer!");
-    }
-
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      computePipeline);
-
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                            computePipelineLayout, 0, 1,
-                            &computeDescriptorSets[currentFrame], 0, nullptr);
-
-    vkCmdDispatch(commandBuffer, PARTICLE_COUNT / 256, 1, 1);
-
-    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-        throw std::runtime_error("failed to record compute command buffer!");
-    }
-}
-void Engine::render(float deltaTime) {
-    lastFrameTime = deltaTime;
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    // Compute submission
-    vkWaitForFences(device, 1, &computeInFlightFences[currentFrame], VK_TRUE,
-                    UINT64_MAX);
-
-    updateUniformBuffer(currentFrame);
-
-    vkResetFences(device, 1, &computeInFlightFences[currentFrame]);
-
-    vkResetCommandBuffer(computeCommandBuffers[currentFrame],
-                         /*VkCommandBufferResetFlagBits*/ 0);
-    recordComputeCommandBuffer(computeCommandBuffers[currentFrame]);
-
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &computeCommandBuffers[currentFrame];
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = &computeFinishedSemaphores[currentFrame];
-
-    if (vkQueueSubmit(computeQueue, 1, &submitInfo,
-                      computeInFlightFences[currentFrame]) != VK_SUCCESS) {
-        throw std::runtime_error("failed to submit compute command buffer!");
-    };
-
-    // Graphics submission
+void Engine::render() {
+    // Wait for previous frame's compute work
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE,
                     UINT64_MAX);
+    vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
+    // Acquire next image
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(
         device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame],
@@ -350,46 +264,59 @@ void Engine::render(float deltaTime) {
         throw std::runtime_error("failed to acquire swap chain image!");
     }
 
-    vkResetFences(device, 1, &inFlightFences[currentFrame]);
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageView = swapChainImageViews[imageIndex];
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-    vkResetCommandBuffer(commandBuffers[currentFrame],
-                         /*VkCommandBufferResetFlagBits*/ 0);
-    recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = computeDescriptorSets[currentFrame];
+    descriptorWrite.dstBinding = 0;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pImageInfo = &imageInfo;
+    vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
 
-    VkSemaphore waitSemaphores[] = {computeFinishedSemaphores[currentFrame],
-                                    imageAvailableSemaphores[currentFrame]};
+    // Reset fence only after we're sure we'll submit work
+
+    // Record compute command buffer
+    vkResetCommandBuffer(computeCommandBuffers[currentFrame], 0);
+    recordComputeCommandBuffer(computeCommandBuffers[currentFrame], imageIndex);
+
+    // Set up compute submission
     VkPipelineStageFlags waitStages[] = {
-        VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submitInfo = {};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    submitInfo.waitSemaphoreCount = 2;
-    submitInfo.pWaitSemaphores = waitSemaphores;
-    submitInfo.pWaitDstStageMask = waitStages;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = &renderFinishedSemaphores[currentFrame];
+    VkSubmitInfo computeSubmitInfo{};
+    computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    computeSubmitInfo.waitSemaphoreCount = 1;
+    computeSubmitInfo.pWaitSemaphores = &imageAvailableSemaphores[currentFrame];
+    computeSubmitInfo.pWaitDstStageMask = waitStages;
+    computeSubmitInfo.commandBufferCount = 1;
+    computeSubmitInfo.pCommandBuffers = &computeCommandBuffers[currentFrame];
+    computeSubmitInfo.signalSemaphoreCount = 1;
+    computeSubmitInfo.pSignalSemaphores =
+        &renderFinishedSemaphores[currentFrame];
 
-    if (vkQueueSubmit(graphicsQueue, 1, &submitInfo,
+    if (vkQueueSubmit(graphicsQueue, 1, &computeSubmitInfo,
                       inFlightFences[currentFrame]) != VK_SUCCESS) {
-        throw std::runtime_error("failed to submit draw command buffer!");
+        throw std::runtime_error("failed to submit compute command buffer!");
     }
 
+    // Present
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = &renderFinishedSemaphores[currentFrame];
-
-    VkSwapchainKHR swapChains[] = {swapChain};
     presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = swapChains;
-
+    presentInfo.pSwapchains = &swapChain;
     presentInfo.pImageIndices = &imageIndex;
 
-    result = vkQueuePresentKHR(presentQueue, &presentInfo);
+    try {
+        result = vkQueuePresentKHR(presentQueue, &presentInfo);
+    } catch (const std::exception& e) {
+        printf("Error in vkQueuePresentKHR: %s\n", e.what());
+    }
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
         framebufferResized) {
@@ -401,29 +328,3 @@ void Engine::render(float deltaTime) {
 
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
-
-// void Engine::createIndexBuffer() {
-//     VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-//     VkBuffer stagingBuffer;
-//     VkDeviceMemory stagingBufferMemory;
-//     createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-//                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-//                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-//                  stagingBuffer, stagingBufferMemory);
-
-//     void* data;
-//     vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-//     memcpy(data, indices.data(), (size_t)bufferSize);
-//     vkUnmapMemory(device, stagingBufferMemory);
-
-//     createBuffer(
-//         bufferSize,
-//         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-//         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
-
-//     copyBuffer(stagingBuffer, indexBuffer, bufferSize);
-
-//     vkDestroyBuffer(device, stagingBuffer, nullptr);
-//     vkFreeMemory(device, stagingBufferMemory, nullptr);
-// }

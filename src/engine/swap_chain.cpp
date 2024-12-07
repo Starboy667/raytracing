@@ -26,7 +26,7 @@ void Engine::recreateSwapChain() {
 
     createSwapChain();
     createImageViews();
-    createFramebuffers();
+    // createFramebuffers();
 }
 
 SwapChainSupportDetails Engine::querySwapChainSupport(VkPhysicalDevice device) {
@@ -61,7 +61,7 @@ SwapChainSupportDetails Engine::querySwapChainSupport(VkPhysicalDevice device) {
 VkSurfaceFormatKHR Engine::chooseSwapSurfaceFormat(
     const std::vector<VkSurfaceFormatKHR>& availableFormats) {
     for (const auto& availableFormat : availableFormats) {
-        if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
+        if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM &&
             availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             return availableFormat;
         }
@@ -93,12 +93,12 @@ VkExtent2D Engine::chooseSwapExtent(
         VkExtent2D actualExtent = {static_cast<uint32_t>(width),
                                    static_cast<uint32_t>(height)};
 
-        actualExtent.width =
-            std::clamp(actualExtent.width, capabilities.minImageExtent.width,
-                       capabilities.maxImageExtent.width);
-        actualExtent.height =
-            std::clamp(actualExtent.height, capabilities.minImageExtent.height,
-                       capabilities.maxImageExtent.height);
+        actualExtent.width = std::min(
+            capabilities.maxImageExtent.width,
+            std::max(capabilities.minImageExtent.width, actualExtent.width));
+        actualExtent.height = std::min(
+            capabilities.maxImageExtent.height,
+            std::max(capabilities.minImageExtent.height, actualExtent.height));
 
         return actualExtent;
     }
@@ -150,11 +150,9 @@ void Engine::createSwapChain() {
         chooseSwapPresentMode(swapChainSupport.presentModes);
     VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
 
-    uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
-    if (swapChainSupport.capabilities.maxImageCount > 0 &&
-        imageCount > swapChainSupport.capabilities.maxImageCount) {
-        imageCount = swapChainSupport.capabilities.maxImageCount;
-    }
+    uint32_t imageCount =
+        std::min(swapChainSupport.capabilities.minImageCount + 1,
+                 swapChainSupport.capabilities.maxImageCount);
 
     VkSwapchainCreateInfoKHR createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -165,7 +163,8 @@ void Engine::createSwapChain() {
     createInfo.imageColorSpace = surfaceFormat.colorSpace;
     createInfo.imageExtent = extent;
     createInfo.imageArrayLayers = 1;
-    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    createInfo.imageUsage = createInfo.imageUsage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 
     QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
     uint32_t queueFamilyIndices[] = {indices.graphicsAndComputeFamily.value(),
@@ -183,17 +182,16 @@ void Engine::createSwapChain() {
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     createInfo.presentMode = presentMode;
     createInfo.clipped = VK_TRUE;
+    createInfo.oldSwapchain = VK_NULL_HANDLE;
 
     if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) !=
         VK_SUCCESS) {
         throw std::runtime_error("failed to create swap chain!");
     }
-
     vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
     swapChainImages.resize(imageCount);
     vkGetSwapchainImagesKHR(device, swapChain, &imageCount,
                             swapChainImages.data());
-
     swapChainImageFormat = surfaceFormat.format;
     swapChainExtent = extent;
 }

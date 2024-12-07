@@ -1,5 +1,8 @@
 # Raytracer
 
-- [ ] Setup Vulkan
-- [ ] Setup ImGui
-- [ ] Setup base window with render
+- [X] Setup Vulkan
+- [X] Setup base window with render
+- [X] Setup Render pipeline
+- [X] Add uniform
+- [X] Compute shaders
+- [ ] Setup ImGui 

@@ -105,56 +105,11 @@ struct Vertex {
     }
 };
 
-// const std::vector<Vertex> vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-//                                       {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-//                                       {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-//                                       {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
-
-// const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
-
-struct UniformBufferObject {
-    float deltaTime = 1.0f;
-};
-
-const uint32_t PARTICLE_COUNT = 8192;
-struct Particle {
-    glm::vec2 position;
-    glm::vec2 velocity;
-    glm::vec4 color;
-
-    static VkVertexInputBindingDescription getBindingDescription() {
-        VkVertexInputBindingDescription bindingDescription{};
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Particle);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-        return bindingDescription;
-    }
-
-    static std::array<VkVertexInputAttributeDescription, 2>
-    getAttributeDescriptions() {
-        std::array<VkVertexInputAttributeDescription, 2>
-            attributeDescriptions{};
-
-        attributeDescriptions[0].binding = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Particle, position);
-
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Particle, color);
-
-        return attributeDescriptions;
-    }
-};
-
 class Engine {
    public:
     Engine(uint32_t width, uint32_t height, GLFWwindow* window);
     ~Engine() { cleanup(); };
-    void render(float deltaTime);
+    void render();
     void SetFramebufferResized(bool resized) { framebufferResized = resized; }
 
    private:
@@ -172,18 +127,15 @@ class Engine {
     void createComputePipeline();
     void createFramebuffers();
     void createCommandPool();
-    // void createVertexBuffer();
-    // void createIndexBuffer();
-    void createShaderStorageBuffer();
+
     void createUniformBuffers();
     void createDescriptorPool();
     void createComputeDescriptorSets();
-    void createCommandBuffers();
     void createSyncObjects();
     void createComputeCommandBuffers();
 
-    void recordComputeCommandBuffer(VkCommandBuffer commandBuffer);
-    void updateUniformBuffer(uint32_t currentImage);
+    void recordComputeCommandBuffer(VkCommandBuffer commandBuffer,
+                                    uint32_t imageIndex);
     void cleanupSwapChain();
     void cleanup();
 
@@ -194,8 +146,6 @@ class Engine {
 
     void populateDebugMessengerCreateInfo(
         VkDebugUtilsMessengerCreateInfoEXT& createInfo);
-    void recordCommandBuffer(VkCommandBuffer commandBuffer,
-                             uint32_t imageIndex);
     void pickPhysicalDevice();
     VkShaderModule createShaderModule(const std::vector<char>& code);
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(
@@ -303,9 +253,7 @@ class Engine {
     // sync
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;
-    std::vector<VkSemaphore> computeFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
-    std::vector<VkFence> computeInFlightFences;
 
     uint32_t currentFrame = 0;
     float lastFrameTime = 0.0f;

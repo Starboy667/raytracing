@@ -7,7 +7,7 @@ int main() {
     try {
         app.Run();
     } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
+        printf("%s\n", e.what());
         return 1;
     }
 

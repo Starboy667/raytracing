@@ -41,6 +41,31 @@ if(MSVC)
     )
 endif()
 
+# Define the paths for the shader sources
+set(COMP_SHADER "${CMAKE_SOURCE_DIR}/res/shaders/shader.comp")
+
+# Define the output paths for SPIR-V files
+set(SPIRV_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/res/shaders")
+set(COMP_SPIRV "${SPIRV_OUTPUT_DIR}/comp.spv")
+
+# Ensure the output directory exists
+file(MAKE_DIRECTORY ${SPIRV_OUTPUT_DIR})
+
+set(GLSLC_PATH "C:/VulkanSDK/1.3.296.0/Bin/glslc.exe")
+# Add custom command to compile the shaders
+add_custom_command(
+    OUTPUT ${COMP_SPIRV}
+    COMMAND ${GLSLC_PATH} ${COMP_SHADER} -o ${COMP_SPIRV}
+    DEPENDS ${COMP_SHADER}
+    VERBATIM
+)
+
+
+# Add a custom target to ensure shaders are part of the build process
+add_custom_target(CompileShaders ALL DEPENDS ${COMP_SPIRV})
+# Ensure raytracer depends on the compiled shaders
+add_dependencies(raytracer CompileShaders)
+
 # GLFW
 add_library(glfw STATIC IMPORTED)
 set(GLFW_DIR lib/glfw)
