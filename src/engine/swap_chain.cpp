@@ -26,7 +26,6 @@ void Engine::recreateSwapChain() {
 
     createSwapChain();
     createImageViews();
-    // createFramebuffers();
 }
 
 SwapChainSupportDetails Engine::querySwapChainSupport(VkPhysicalDevice device) {

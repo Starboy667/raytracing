@@ -13,8 +13,7 @@ class Application {
     void Run();
 
    private:
-    void Init();
-    void Shutdown();
+    void showFPS(GLFWwindow* pWindow);
     void InitWindow(uint32_t width, uint32_t height, const char* title);
     static void framebufferResizeCallback(GLFWwindow* window, int width,
                                           int height) {
@@ -31,5 +30,5 @@ class Application {
     uint32_t currentFrame = 0;
     float lastFrameTime = 0.0f;
     double lastTime = 0.0f;
+    size_t nbFrames = 0;
 };
-Application CreateApplication(int argc, char** argv);

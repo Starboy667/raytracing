@@ -123,12 +123,9 @@ class Engine {
     void createImageViews();
     void createRenderPass();
     void createComputeDescriptorSetLayout();
-    void createGraphicsPipeline();
     void createComputePipeline();
-    void createFramebuffers();
     void createCommandPool();
 
-    void createUniformBuffers();
     void createDescriptorPool();
     void createComputeDescriptorSets();
     void createSyncObjects();
