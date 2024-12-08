@@ -19,6 +19,7 @@ set_target_properties(raytracer PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED
 
 # Includes
 target_include_directories(raytracer PUBLIC includes)
+set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build" FORCE)
 
 # linker flags
 add_link_options(-lmingw32 -lgdi32 -luser32 -lkernel32 -ladvapi32 -lshell32 -lgcc -lmoldname -lmingwex -lmsvcrt -lwinspool -lcomdlg32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32)

@@ -1,7 +1,41 @@
 #include "engine.hpp"
 
+// TODO: move to util
+
+inline float random_float() {
+    static std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
+    static std::mt19937 generator;
+    return distribution(generator);
+}
+
+inline float random_float(float min, float max) {
+    return min + random_float() * (max - min);
+}
+
 Engine::Engine(uint32_t width, uint32_t height, GLFWwindow* window)
     : window(window) {
+    camera.camera_position = glm::vec3(0.0f, 0.0f, -10.0f);  // Move camera back
+    camera.camera_forward = glm::vec3(0.0f, 0.0f, 1.0f);     // Looking along +Z
+    camera.camera_right = glm::vec3(1.0f, 0.0f, 0.0f);       // Right along +X
+    camera.camera_up = glm::vec3(0.0f, 1.0f, 0.0f);
+    camera.sphereCount = 20;
+
+    spheres.reserve(camera.sphereCount);
+    for (int i = 0; i < camera.sphereCount; i++) {
+        float x = random_float(-10.0f, 10.0f);
+        float y = random_float(-10.0f, 10.0f);
+        float z = random_float(-10.0f, 10.0f);
+        float r = random_float();
+        float g = random_float();
+        float b = random_float();
+        float radius = random_float(0.5f, 1.0f);
+
+        Sphere sphere{};
+        sphere.center = glm::vec3(x, y, z);
+        sphere.radius = radius;
+        sphere.color = glm::vec3(r, g, b);
+        spheres.push_back(sphere);
+    }
     initVulkan();
 }
 
@@ -16,8 +50,11 @@ void Engine::initVulkan() {
     createComputeDescriptorSetLayout();
     createComputePipeline();
     createCommandPool();
+    // for uniforms
+    createUniformBuffers();
     createDescriptorPool();
-    createComputeDescriptorSets();
+    createDescriptorSets();
+    // createComputeDescriptorSets();
     createComputeCommandBuffers();
     createSyncObjects();
 }
@@ -25,6 +62,14 @@ void Engine::initVulkan() {
 void Engine::cleanup() {
     vkDeviceWaitIdle(device);
     cleanupSwapChain();
+
+    // Add cleanup for uniform and sphere buffers
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        vkDestroyBuffer(device, uniformBuffers[i], nullptr);
+        vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
+        vkDestroyBuffer(device, sphereBuffers[i], nullptr);
+        vkFreeMemory(device, sphereBuffersMemory[i], nullptr);
+    }
 
     vkDestroyPipeline(device, computePipeline, nullptr);
     vkDestroyPipelineLayout(device, computePipelineLayout, nullptr);
@@ -157,15 +202,22 @@ static std::vector<char> readFile(const std::string& filename) {
     return buffer;
 }
 
+// for uniforms
 void Engine::createDescriptorPool() {
-    VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    std::array<VkDescriptorPoolSize, 3> poolSizes{};
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    // add sphere
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    // add uniform
+    poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
     poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
     if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) !=
@@ -175,16 +227,26 @@ void Engine::createDescriptorPool() {
 }
 
 void Engine::createComputeDescriptorSetLayout() {
-    VkDescriptorSetLayoutBinding layoutBinding{};
-    layoutBinding.binding = 0;
-    layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    layoutBinding.descriptorCount = 1;
-    layoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    std::array<VkDescriptorSetLayoutBinding, 3> layoutBindings{};
+    layoutBindings[0].binding = 0;
+    layoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    layoutBindings[0].descriptorCount = 1;
+    layoutBindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    // sphere
+    layoutBindings[1].binding = 1;
+    layoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    layoutBindings[1].descriptorCount = 1;
+    layoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    // uniform
+    layoutBindings[2].binding = 2;
+    layoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    layoutBindings[2].descriptorCount = 1;
+    layoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &layoutBinding;
+    layoutInfo.bindingCount = static_cast<uint32_t>(layoutBindings.size());
+    layoutInfo.pBindings = layoutBindings.data();
 
     if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr,
                                     &computeDescriptorSetLayout) !=
@@ -197,7 +259,7 @@ void Engine::createComputeDescriptorSetLayout() {
 void Engine::createComputeDescriptorSets() {
     std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
                                                computeDescriptorSetLayout);
-
+    printf("Creating compute descriptor sets\n");
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool = descriptorPool;
@@ -372,7 +434,7 @@ void Engine::recordComputeCommandBuffer(VkCommandBuffer commandBuffer,
                       computePipeline);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                             computePipelineLayout, 0, 1,
-                            &computeDescriptorSets[currentFrame], 0, nullptr);
+                            &descriptorSets[currentFrame], 0, nullptr);
 
     vkCmdDispatch(commandBuffer,
                   static_cast<uint32_t>(swapChainExtent.width / 8),

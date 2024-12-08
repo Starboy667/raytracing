@@ -8,6 +8,18 @@ struct Sphere {
     vec3 color;
 };
 
+layout(std140, binding = 1) readonly buffer sphereBuffer {
+    Sphere spheres[];
+} SphereData; 
+
+layout(std140, binding = 2) uniform UniformBufferObject {
+    vec3 camera_forward;
+    vec3 camera_right;
+    vec3 camera_up;
+    vec3 camera_position;
+    int sphereCount;
+} SceneData;
+
 struct Ray {
     vec3 origin;
     vec3 direction;
@@ -20,32 +32,99 @@ struct Camera {
     vec3 up;
 };
 
-float hit(Ray ray, Sphere sphere) {
+struct HitRecord {
+    vec3 p;
+    vec3 normal;
+    float t;
+    bool front_face;
+};
+
+const highp float pos_infinity = 3.402823466e+38;
+
+void set_face_normal(inout HitRecord rec, Ray ray, inout vec3 outward_normal) {
+    rec.front_face = dot(ray.direction, outward_normal) < 0.0;
+    rec.normal = rec.front_face ? outward_normal : -outward_normal;
+}
+
+bool hit(Ray ray, Sphere sphere, float t_min, float t_max, out HitRecord rec) {
     vec3 oc = sphere.center - ray.origin; 
     float a = pow(length(ray.direction), 2);
     float h = dot(oc, ray.direction);
     float c = pow(length(oc), 2) - sphere.radius * sphere.radius;
     float discriminant = h * h - a * c;
     if (discriminant < 0) {
-        return -1.0;
-    } else {
-        return (h - sqrt(discriminant) ) / a;
+        return false;
     }
+    float sqrtd = sqrt(discriminant);
+
+    float root = (h - sqrtd) / a;
+    if ((t_min < root && root < t_max) == false) {
+        root = (h + sqrtd) / a;
+        if ((t_min < root && root < t_max) == false)
+            return false;
+    }
+
+    rec.t = root;
+    rec.p = ray.origin + rec.t * ray.direction;
+    vec3 outward_normal = (rec.p - sphere.center) / sphere.radius;
+    set_face_normal(rec, ray, outward_normal);
+    // rec.mat = mat;
+    return true;
 }
 
-vec3 get_color(Ray ray, Sphere sphere) {
-    float t = hit(ray, sphere);
-    if (t > 0) {
-        vec3 N = normalize(ray.origin + t * ray.direction - sphere.center);
-        return 0.5 * (N + 1.0);
+// vec3 get_color(Ray ray, Sphere sphere) {
+//     // background color
+//     // return vec3(0.0, 0.250, 0.250);
+//     //  hit_record rec;
+//     // if (world.hit(r, 0, infinity, rec)) {
+//     //     return 0.5 * (rec.normal + color(1,1,1));
+//     // }
+//     float t = hit(ray, sphere);
+//     if (t > 0) {
+//         vec3 N = normalize(ray.origin + t * ray.direction - sphere.center);
+//         return 0.5 * (N + 1.0);
+//     }
+//     vec3 unit_direction = normalize(ray.direction);
+//     float a = 0.5 * (unit_direction.y + 1.0);
+//     return (1.0 - a) * vec3(1.0) + a * vec3(0.5, 0.7, 1.0);
+// }
+
+bool calculate_hit(Ray ray, float t_min, float t_max, out HitRecord hitRecord) {
+    HitRecord tempRecord;
+    bool hit_anything = false;
+    float closest_so_far = t_max;
+
+    for (int i = 0; i < SceneData.sphereCount; i++) {
+        Sphere sphere = SphereData.spheres[i];
+    // Sphere sphere;
+    // sphere.center = vec3(3.0, 0.0, 0.0);
+    // sphere.radius = 1.0;
+    // sphere.color = vec3(1.0, 0.0, 0.0);
+        if (hit(ray, sphere, t_min, closest_so_far, tempRecord)) {
+            hit_anything = true;
+            closest_so_far = tempRecord.t;
+            hitRecord = tempRecord;
+        }
     }
-    // background color
-    // return vec3(0.0, 0.250, 0.250);
+    return hit_anything;
+}
+
+vec3 ray_color(Ray ray, int depth) {
+    if (depth <= 0) {
+        return vec3(0.0);
+    }
+
+    HitRecord hitRecord;
+    if (calculate_hit(ray, 0, pos_infinity, hitRecord)) {
+        // return vec3(1.0, 0.0, 0.0);
+        return 0.5 * (hitRecord.normal + vec3(1.0));
+    }
+    return vec3(0.0);
+
     vec3 unit_direction = normalize(ray.direction);
     float a = 0.5 * (unit_direction.y + 1.0);
     return (1.0 - a) * vec3(1.0) + a * vec3(0.5, 0.7, 1.0);
 }
-
 
 void main() {
     // x.y = pixel position
@@ -57,19 +136,25 @@ void main() {
     float verticalCoefficient = ((float(screen_pos.y) * 2 - screen_size.y) / screen_size.x);
 
     Camera camera;
-    camera.position = vec3(0.0);
-    camera.forwards = vec3(1.0, 0.0, 0.0);
-    camera.right = vec3(0.0, 1.0, 0.0);
-    camera.up = vec3(0.0, 0.0, 1.0);
+    camera.position = SceneData.camera_position;
+    camera.forwards = SceneData.camera_forward;
+    camera.right = SceneData.camera_right;
+    camera.up = SceneData.camera_up;
 
     Ray ray;
     ray.origin = camera.position;
     ray.direction = camera.forwards + horizontalCoefficient * camera.right + verticalCoefficient * camera.up;
+    // ray.direction = camera.forwards + horizontalCoefficient * camera.right + verticalCoefficient * camera.up;
+    
+    // ray.direction = normalize(camera.forwards + 
+    //                         horizontalCoefficient * camera.right - 
+    //                         verticalCoefficient * camera.up);  // Note the negative here
+    vec3 pixel_color = vec3(0.0);
+    pixel_color = ray_color(ray, 10);
+    // for (int i = 0; i < SceneData.sphereCount; i++) {
+    //     Sphere sphere = SphereData.spheres[i];
+    //     pixel_color = get_color(ray, sphere);
+    // }
 
-    Sphere sphere;
-    sphere.center = vec3(3.0, 0.0, 0.0);
-    sphere.radius = 1.0;
-    sphere.color = vec3(1.0, 0.3, 0.7);
-
-    imageStore(colorBuffer, screen_pos, vec4(get_color(ray, sphere), 1.0));
+    imageStore(colorBuffer, screen_pos, vec4(pixel_color, 1.0));
 }

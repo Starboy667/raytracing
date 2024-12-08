@@ -1,3 +1,4 @@
+
 #pragma once
 
 #define GLFW_INCLUDE_VULKAN
@@ -34,6 +35,21 @@ const bool enableValidationLayers = false;
 #else
 const bool enableValidationLayers = true;
 #endif
+
+struct UniformBufferObject {
+    alignas(16) glm::vec3 camera_forward;
+    alignas(16) glm::vec3 camera_right;
+    alignas(16) glm::vec3 camera_up;
+    alignas(16) glm::vec3 camera_position;
+    alignas(4) int sphereCount;
+};
+
+struct Sphere {
+    alignas(16) glm::vec3 center;  // Aligned to 16 bytes
+    alignas(4) float radius;       // Aligned to 4 bytes
+    alignas(16) glm::vec3 color;   // Aligned to 16 bytes
+    alignas(4) float padding;      // Add padding to ensure 16-byte alignment
+};
 
 inline VkResult CreateDebugUtilsMessengerEXT(
     VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
@@ -126,10 +142,15 @@ class Engine {
     void createComputePipeline();
     void createCommandPool();
 
-    void createDescriptorPool();
+    // void createDescriptorPool();
     void createComputeDescriptorSets();
     void createSyncObjects();
     void createComputeCommandBuffers();
+
+    void createUniformBuffers();
+    void updateUniformBuffer(uint32_t currentImage);
+    void createDescriptorSets();
+    void createDescriptorPool();
 
     void recordComputeCommandBuffer(VkCommandBuffer commandBuffer,
                                     uint32_t imageIndex);
@@ -188,6 +209,7 @@ class Engine {
     }
 
    private:
+    // window
     GLFWwindow* window;
 
     // instance
@@ -224,9 +246,10 @@ class Engine {
 
     VkCommandPool commandPool;
 
-    // shader storage buffer
-    std::vector<VkBuffer> shaderStorageBuffers;
-    std::vector<VkDeviceMemory> shaderStorageBuffersMemory;
+    // sphere and scene buffer
+    std::vector<VkBuffer> sphereBuffers;
+    std::vector<VkDeviceMemory> sphereBuffersMemory;
+    std::vector<void*> sphereBuffersMapped;
 
     std::vector<VkBuffer> uniformBuffers;
     std::vector<VkDeviceMemory> uniformBuffersMemory;
@@ -235,13 +258,6 @@ class Engine {
     // command
     std::vector<VkCommandBuffer> commandBuffers;
     std::vector<VkCommandBuffer> computeCommandBuffers;
-
-    // vertex
-    VkBuffer vertexBuffer;
-    VkDeviceMemory vertexBufferMemory;
-
-    VkBuffer indexBuffer;
-    VkDeviceMemory indexBufferMemory;
 
     // descriptor
     VkDescriptorPool descriptorPool;
@@ -252,9 +268,15 @@ class Engine {
     std::vector<VkSemaphore> renderFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
 
+    // for uniforms
+    // VkDescriptorPool descriptorPool;
+    std::vector<VkDescriptorSet> descriptorSets;
+    // ??
+    VkDescriptorSetLayout descriptorSetLayout;
     uint32_t currentFrame = 0;
-    float lastFrameTime = 0.0f;
-
     bool framebufferResized = false;
-    double lastTime = 0.0f;
+
+    // TODO: bouger
+    std::vector<Sphere> spheres;
+    UniformBufferObject camera;
 };

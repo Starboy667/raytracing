@@ -1,5 +1,7 @@
 #include "graphics.hpp"
 
+#include "uniform.hpp"
+
 VkShaderModule Engine::createShaderModule(const std::vector<char>& code) {
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -113,19 +115,56 @@ void Engine::render() {
         throw std::runtime_error("failed to acquire swap chain image!");
     }
 
+    updateUniformBuffer(currentFrame);
+
     VkDescriptorImageInfo imageInfo{};
     imageInfo.imageView = swapChainImageViews[imageIndex];
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageInfo.sampler = nullptr;
+    int i = currentFrame;
+    // Storage Buffer descriptor for spheres (binding = 1)
+    VkDescriptorBufferInfo sphereBufferInfo{};
+    sphereBufferInfo.buffer = sphereBuffers[i];
+    sphereBufferInfo.offset = 0;
+    sphereBufferInfo.range = sizeof(Sphere) * camera.sphereCount;
 
-    VkWriteDescriptorSet descriptorWrite{};
-    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrite.dstSet = computeDescriptorSets[currentFrame];
-    descriptorWrite.dstBinding = 0;
-    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    descriptorWrite.descriptorCount = 1;
-    descriptorWrite.pImageInfo = &imageInfo;
-    vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+    // Uniform Buffer descriptor (binding = 2)
+    VkDescriptorBufferInfo uniformBufferInfo{};
+    uniformBufferInfo.buffer = uniformBuffers[i];
+    uniformBufferInfo.offset = 0;
+    uniformBufferInfo.range = sizeof(UniformBufferObject);
 
+    std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
+
+    // Storage Image (binding = 0)
+    descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrites[0].dstSet = descriptorSets[i];
+    descriptorWrites[0].dstBinding = 0;
+    descriptorWrites[0].dstArrayElement = 0;
+    descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    descriptorWrites[0].descriptorCount = 1;
+    descriptorWrites[0].pImageInfo = &imageInfo;
+
+    // Sphere Storage Buffer (binding = 1)
+    descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrites[1].dstSet = descriptorSets[i];
+    descriptorWrites[1].dstBinding = 1;
+    descriptorWrites[1].dstArrayElement = 0;
+    descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptorWrites[1].descriptorCount = 1;
+    descriptorWrites[1].pBufferInfo = &sphereBufferInfo;
+
+    // Uniform Buffer (binding = 2)
+    descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrites[2].dstSet = descriptorSets[i];
+    descriptorWrites[2].dstBinding = 2;
+    descriptorWrites[2].dstArrayElement = 0;
+    descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrites[2].descriptorCount = 1;
+    descriptorWrites[2].pBufferInfo = &uniformBufferInfo;
+    vkUpdateDescriptorSets(device,
+                           static_cast<uint32_t>(descriptorWrites.size()),
+                           descriptorWrites.data(), 0, nullptr);
     // Reset fence only after we're sure we'll submit work
 
     // Record compute command buffer
@@ -151,7 +190,6 @@ void Engine::render() {
                       inFlightFences[currentFrame]) != VK_SUCCESS) {
         throw std::runtime_error("failed to submit compute command buffer!");
     }
-
     // Present
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -174,6 +212,5 @@ void Engine::render() {
     } else if (result != VK_SUCCESS) {
         throw std::runtime_error("failed to present swap chain image!");
     }
-
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
