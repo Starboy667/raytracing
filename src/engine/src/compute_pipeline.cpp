@@ -412,54 +412,7 @@ void ComputePipeline::createDescriptorSets() {
     }
 }
 
-void ComputePipeline::createSyncObjects() {
-    m_imageAvailableSemaphores.resize(config::MAX_FRAMES_IN_FLIGHT);
-    m_renderFinishedSemaphores.resize(config::MAX_FRAMES_IN_FLIGHT);
-    m_inFlightFences.resize(config::MAX_FRAMES_IN_FLIGHT);
-
-    VkSemaphoreCreateInfo semaphoreInfo{};
-    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-    for (size_t i = 0; i < config::MAX_FRAMES_IN_FLIGHT; i++) {
-        if (vkCreateSemaphore(m_device.device(), &semaphoreInfo, nullptr,
-                              &m_imageAvailableSemaphores[i]) != VK_SUCCESS ||
-            vkCreateSemaphore(m_device.device(), &semaphoreInfo, nullptr,
-                              &m_renderFinishedSemaphores[i]) != VK_SUCCESS ||
-            vkCreateFence(m_device.device(), &fenceInfo, nullptr,
-                          &m_inFlightFences[i]) != VK_SUCCESS) {
-            throw std::runtime_error(
-                "failed to create graphics synchronization objects for a "
-                "frame!");
-        }
-    }
-}
-
-void ComputePipeline::render() {
-    vkWaitForFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame],
-                    VK_TRUE, UINT64_MAX);
-
-    uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(
-        m_device.device(), m_swapChain.getSwapChain(), UINT64_MAX,
-        m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE,
-        &imageIndex);
-
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        m_swapChain.recreateSwapChain();
-        return;
-    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-        throw std::runtime_error("failed to acquire swap chain image!");
-    }
-
-    vkResetFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame]);
-
-    updateScene(m_currentFrame);
-
-    // TODO: clean
+void ComputePipeline::updateDescriptorSets(uint32_t imageIndex) {
     VkDescriptorImageInfo imageInfo{};
     imageInfo.imageView = m_swapChain.imageViews()[imageIndex];
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -508,7 +461,55 @@ void ComputePipeline::render() {
     vkUpdateDescriptorSets(m_device.device(),
                            static_cast<uint32_t>(descriptorWrites.size()),
                            descriptorWrites.data(), 0, nullptr);
+}
 
+void ComputePipeline::createSyncObjects() {
+    m_imageAvailableSemaphores.resize(config::MAX_FRAMES_IN_FLIGHT);
+    m_renderFinishedSemaphores.resize(config::MAX_FRAMES_IN_FLIGHT);
+    m_inFlightFences.resize(config::MAX_FRAMES_IN_FLIGHT);
+
+    VkSemaphoreCreateInfo semaphoreInfo{};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (size_t i = 0; i < config::MAX_FRAMES_IN_FLIGHT; i++) {
+        if (vkCreateSemaphore(m_device.device(), &semaphoreInfo, nullptr,
+                              &m_imageAvailableSemaphores[i]) != VK_SUCCESS ||
+            vkCreateSemaphore(m_device.device(), &semaphoreInfo, nullptr,
+                              &m_renderFinishedSemaphores[i]) != VK_SUCCESS ||
+            vkCreateFence(m_device.device(), &fenceInfo, nullptr,
+                          &m_inFlightFences[i]) != VK_SUCCESS) {
+            throw std::runtime_error(
+                "failed to create graphics synchronization objects for a "
+                "frame!");
+        }
+    }
+}
+
+void ComputePipeline::render() {
+    vkWaitForFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame],
+                    VK_TRUE, UINT64_MAX);
+
+    uint32_t imageIndex;
+    VkResult result = vkAcquireNextImageKHR(
+        m_device.device(), m_swapChain.getSwapChain(), UINT64_MAX,
+        m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE,
+        &imageIndex);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        m_swapChain.recreateSwapChain();
+        return;
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+        throw std::runtime_error("failed to acquire swap chain image!");
+    }
+
+    vkResetFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame]);
+
+    updateScene(m_currentFrame);
+    updateDescriptorSets(imageIndex);
     vkResetCommandBuffer(m_commandBuffers[m_currentFrame], 0);
     recordCommandBuffer(m_commandBuffers[m_currentFrame], imageIndex);
 

@@ -11,9 +11,9 @@ class ComputePipeline {
     ~ComputePipeline();
     void render();
     void setFramebufferResized(bool resized) { m_framebufferResized = resized; }
-    VkSemaphore getCurrentRenderFinishedSemaphore() const {
-        return m_renderFinishedSemaphores[m_currentFrame];
-    }
+    // VkSemaphore getCurrentRenderFinishedSemaphore() const {
+    //     return m_renderFinishedSemaphores[m_currentFrame];
+    // }
 
    private:
     void createPipeline();
@@ -27,6 +27,7 @@ class ComputePipeline {
     void recordCommandBuffer(VkCommandBuffer commandBuffer,
                              uint32_t imageIndex);
     void updateScene(uint32_t currentImage);
+    void updateDescriptorSets(uint32_t imageIndex);
 
    private:
     Device& m_device;
