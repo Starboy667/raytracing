@@ -18,7 +18,6 @@ ComputePipeline::ComputePipeline(Device& device, SwapChain& swapChain,
     createDescriptorPool();
     createDescriptorSets();
     createCommandBuffers();
-    createSyncObjects();
 }
 
 ComputePipeline::~ComputePipeline() {
@@ -35,13 +34,6 @@ ComputePipeline::~ComputePipeline() {
     vkDestroyPipeline(m_device.device(), m_pipeline, nullptr);
     vkDestroyPipelineLayout(m_device.device(), m_pipelineLayout, nullptr);
     vkDestroyDescriptorPool(m_device.device(), m_descriptorPool, nullptr);
-    for (size_t i = 0; i < config::MAX_FRAMES_IN_FLIGHT; i++) {
-        vkDestroySemaphore(m_device.device(), m_renderFinishedSemaphores[i],
-                           nullptr);
-        vkDestroySemaphore(m_device.device(), m_imageAvailableSemaphores[i],
-                           nullptr);
-        vkDestroyFence(m_device.device(), m_inFlightFences[i], nullptr);
-    }
 
     vkDestroyCommandPool(m_device.device(), m_commandPool, nullptr);
 }
@@ -227,6 +219,7 @@ void ComputePipeline::createDescriptorSetLayout() {
 }
 
 void ComputePipeline::recordCommandBuffer(VkCommandBuffer commandBuffer,
+                                          uint32_t currentFrame,
                                           uint32_t imageIndex) {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -262,7 +255,7 @@ void ComputePipeline::recordCommandBuffer(VkCommandBuffer commandBuffer,
                       m_pipeline);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                             m_pipelineLayout, 0, 1,
-                            &m_descriptorSets[m_currentFrame], 0, nullptr);
+                            &m_descriptorSets[currentFrame], 0, nullptr);
 
     vkCmdDispatch(commandBuffer,
                   static_cast<uint32_t>(m_swapChain.extent().width / 8),
@@ -272,7 +265,8 @@ void ComputePipeline::recordCommandBuffer(VkCommandBuffer commandBuffer,
     // Transition the image back to PRESENT_SRC_KHR layout for presentation
     bob.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     bob.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-    bob.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    // bob.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    bob.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     bob.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     bob.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     bob.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -284,8 +278,8 @@ void ComputePipeline::recordCommandBuffer(VkCommandBuffer commandBuffer,
     bob.subresourceRange.baseArrayLayer = 0;
     bob.subresourceRange.layerCount = 1;
     vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0,
-                         nullptr, 1, &bob);
+                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0,
+                         nullptr, 0, nullptr, 1, &bob);
 
     try {
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -412,12 +406,13 @@ void ComputePipeline::createDescriptorSets() {
     }
 }
 
-void ComputePipeline::updateDescriptorSets(uint32_t imageIndex) {
+void ComputePipeline::updateDescriptorSets(uint32_t imageIndex,
+                                           uint32_t currentFrame) {
     VkDescriptorImageInfo imageInfo{};
     imageInfo.imageView = m_swapChain.imageViews()[imageIndex];
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     imageInfo.sampler = nullptr;
-    int i = m_currentFrame;
+    int i = currentFrame;
     // Storage Buffer descriptor for spheres (binding = 1)
     VkDescriptorBufferInfo sphereBufferInfo{};
     sphereBufferInfo.buffer = m_sphereBuffers[i];
@@ -463,97 +458,71 @@ void ComputePipeline::updateDescriptorSets(uint32_t imageIndex) {
                            descriptorWrites.data(), 0, nullptr);
 }
 
-void ComputePipeline::createSyncObjects() {
-    m_imageAvailableSemaphores.resize(config::MAX_FRAMES_IN_FLIGHT);
-    m_renderFinishedSemaphores.resize(config::MAX_FRAMES_IN_FLIGHT);
-    m_inFlightFences.resize(config::MAX_FRAMES_IN_FLIGHT);
+void ComputePipeline::render(uint32_t imageIndex, uint32_t currentFrame) {
+    // vkWaitForFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame],
+    //                 VK_TRUE, UINT64_MAX);
 
-    VkSemaphoreCreateInfo semaphoreInfo{};
-    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    // uint32_t imageIndex;
+    // VkResult result = vkAcquireNextImageKHR(
+    //     m_device.device(), m_swapChain.getSwapChain(), UINT64_MAX,
+    //     m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE,
+    //     &imageIndex);
 
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    // if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    //     m_swapChain.recreateSwapChain();
+    //     return;
+    // } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+    //     throw std::runtime_error("failed to acquire swap chain image!");
+    // }
 
-    for (size_t i = 0; i < config::MAX_FRAMES_IN_FLIGHT; i++) {
-        if (vkCreateSemaphore(m_device.device(), &semaphoreInfo, nullptr,
-                              &m_imageAvailableSemaphores[i]) != VK_SUCCESS ||
-            vkCreateSemaphore(m_device.device(), &semaphoreInfo, nullptr,
-                              &m_renderFinishedSemaphores[i]) != VK_SUCCESS ||
-            vkCreateFence(m_device.device(), &fenceInfo, nullptr,
-                          &m_inFlightFences[i]) != VK_SUCCESS) {
-            throw std::runtime_error(
-                "failed to create graphics synchronization objects for a "
-                "frame!");
-        }
-    }
-}
+    // vkResetFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame]);
 
-void ComputePipeline::render() {
-    vkWaitForFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame],
-                    VK_TRUE, UINT64_MAX);
+    updateScene(currentFrame);
+    updateDescriptorSets(imageIndex, currentFrame);
+    vkResetCommandBuffer(m_commandBuffers[currentFrame], 0);
+    recordCommandBuffer(m_commandBuffers[currentFrame], currentFrame,
+                        imageIndex);
 
-    uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(
-        m_device.device(), m_swapChain.getSwapChain(), UINT64_MAX,
-        m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE,
-        &imageIndex);
+    // VkPipelineStageFlags waitStages[] = {
+    //     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        m_swapChain.recreateSwapChain();
-        return;
-    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-        throw std::runtime_error("failed to acquire swap chain image!");
-    }
+    // VkSubmitInfo computeSubmitInfo{};
+    // computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    // computeSubmitInfo.waitSemaphoreCount = 1;
+    // computeSubmitInfo.pWaitSemaphores = &imageAvailableSemaphore;
+    // computeSubmitInfo.pWaitDstStageMask = waitStages;
+    // computeSubmitInfo.commandBufferCount = 1;
+    // computeSubmitInfo.pCommandBuffers = &m_commandBuffers[currentFrame];
+    // computeSubmitInfo.signalSemaphoreCount = 1;
+    // computeSubmitInfo.pSignalSemaphores = &renderFinishedSemaphore;
 
-    vkResetFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame]);
+    // if (vkQueueSubmit(m_device.computeQueue(), 1, &computeSubmitInfo,
+    //                   inFlightFence) != VK_SUCCESS) {
+    //     throw std::runtime_error("failed to submit compute command buffer!");
+    // }
 
-    updateScene(m_currentFrame);
-    updateDescriptorSets(imageIndex);
-    vkResetCommandBuffer(m_commandBuffers[m_currentFrame], 0);
-    recordCommandBuffer(m_commandBuffers[m_currentFrame], imageIndex);
+    // // Present
+    // VkPresentInfoKHR presentInfo{};
+    // presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    // presentInfo.waitSemaphoreCount = 1;
+    // presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
+    // presentInfo.swapchainCount = 1;
+    // presentInfo.pSwapchains = &m_swapChain.getSwapChain();
+    // presentInfo.pImageIndices = &imageIndex;
 
-    VkPipelineStageFlags waitStages[] = {
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    // VkResult result;
+    // try {
+    //     result = vkQueuePresentKHR(m_device.presentQueue(), &presentInfo);
+    // } catch (const std::exception& e) {
+    //     printf("Error in vkQueuePresentKHR: %s\n", e.what());
+    // }
 
-    VkSubmitInfo computeSubmitInfo{};
-    computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    computeSubmitInfo.waitSemaphoreCount = 1;
-    computeSubmitInfo.pWaitSemaphores =
-        &m_imageAvailableSemaphores[m_currentFrame];
-    computeSubmitInfo.pWaitDstStageMask = waitStages;
-    computeSubmitInfo.commandBufferCount = 1;
-    computeSubmitInfo.pCommandBuffers = &m_commandBuffers[m_currentFrame];
-    computeSubmitInfo.signalSemaphoreCount = 1;
-    computeSubmitInfo.pSignalSemaphores =
-        &m_renderFinishedSemaphores[m_currentFrame];
-
-    if (vkQueueSubmit(m_device.computeQueue(), 1, &computeSubmitInfo,
-                      m_inFlightFences[m_currentFrame]) != VK_SUCCESS) {
-        throw std::runtime_error("failed to submit compute command buffer!");
-    }
-
-    // Present
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &m_renderFinishedSemaphores[m_currentFrame];
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &m_swapChain.getSwapChain();
-    presentInfo.pImageIndices = &imageIndex;
-
-    try {
-        result = vkQueuePresentKHR(m_device.presentQueue(), &presentInfo);
-    } catch (const std::exception& e) {
-        printf("Error in vkQueuePresentKHR: %s\n", e.what());
-    }
-
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
-        m_framebufferResized) {
-        m_framebufferResized = false;
-        m_swapChain.recreateSwapChain();
-    } else if (result != VK_SUCCESS) {
-        throw std::runtime_error("failed to present swap chain image!");
-    }
-    m_currentFrame = (m_currentFrame + 1) % config::MAX_FRAMES_IN_FLIGHT;
+    // if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
+    //     m_framebufferResized) {
+    //     m_framebufferResized = false;
+    //     m_swapChain.recreateSwapChain();
+    // } else if (result != VK_SUCCESS) {
+    //     throw std::runtime_error("failed to present swap chain image!");
+    // }
+    // m_currentFrame = (m_currentFrame + 1) % config::MAX_FRAMES_IN_FLIGHT;
 }

@@ -8,6 +8,8 @@ SwapChain::SwapChain(Device& device, GLFWwindow* window, VkSurfaceKHR surface)
     : m_device(device), m_window(window), m_surface(surface) {
     createSwapChain();
     createImageViews();
+    createRenderPass();
+    createFramebuffers();
 }
 
 SwapChain::~SwapChain() { cleanupSwapChain(); }
@@ -16,8 +18,81 @@ void SwapChain::cleanupSwapChain() {
     for (auto imageView : m_imageViews) {
         vkDestroyImageView(m_device.device(), imageView, nullptr);
     }
-
+    for (auto framebuffer : m_framebuffers) {
+        if (framebuffer != VK_NULL_HANDLE) {
+            vkDestroyFramebuffer(m_device.device(), framebuffer, nullptr);
+        }
+    }
+    vkDestroyRenderPass(m_device.device(), m_renderPass, nullptr);
     vkDestroySwapchainKHR(m_device.device(), m_swapChain, nullptr);
+}
+
+void SwapChain::createFramebuffers() {
+    m_framebuffers.resize(m_imageCount);
+
+    for (size_t i = 0; i < m_imageCount; i++) {
+        VkImageView attachments[] = {m_imageViews[i]};
+
+        VkFramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = m_renderPass;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = attachments;
+        framebufferInfo.width = m_extent.width;
+        framebufferInfo.height = m_extent.height;
+        framebufferInfo.layers = 1;
+
+        if (vkCreateFramebuffer(m_device.device(), &framebufferInfo, nullptr,
+                                &m_framebuffers[i]) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create framebuffer!");
+        }
+    }
+}
+
+void SwapChain::createRenderPass() {
+    VkAttachmentDescription colorAttachment{};
+    colorAttachment.format = m_imageFormat;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference colorAttachmentRef{};
+    colorAttachmentRef.attachment = 0;
+    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorAttachmentRef;
+
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    dependency.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+
+    if (vkCreateRenderPass(m_device.device(), &renderPassInfo, nullptr,
+                           &m_renderPass) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create render pass!");
+    }
 }
 
 void SwapChain::recreateSwapChain() {
@@ -32,6 +107,8 @@ void SwapChain::recreateSwapChain() {
     cleanupSwapChain();
     createSwapChain();
     createImageViews();
+    createRenderPass();
+    createFramebuffers();
 }
 
 VkSurfaceFormatKHR SwapChain::chooseSwapSurfaceFormat(

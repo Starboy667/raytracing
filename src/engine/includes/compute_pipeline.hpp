@@ -9,11 +9,10 @@ class ComputePipeline {
    public:
     ComputePipeline(Device& device, SwapChain& swapChain, Scene& scene);
     ~ComputePipeline();
-    void render();
-    void setFramebufferResized(bool resized) { m_framebufferResized = resized; }
-    // VkSemaphore getCurrentRenderFinishedSemaphore() const {
-    //     return m_renderFinishedSemaphores[m_currentFrame];
-    // }
+    void render(uint32_t imageIndex, uint32_t currentFrame);
+    VkCommandBuffer* getCurrentCommandBuffer(uint32_t currentFrame) {
+        return &m_commandBuffers[currentFrame];
+    }
 
    private:
     void createPipeline();
@@ -22,12 +21,11 @@ class ComputePipeline {
     void createCommandBuffers();
     void createDescriptorPool();
     void createDescriptorSets();
-    void createSyncObjects();
     void createUniformBuffers();
     void recordCommandBuffer(VkCommandBuffer commandBuffer,
-                             uint32_t imageIndex);
+                             uint32_t currentFrame, uint32_t imageIndex);
     void updateScene(uint32_t currentImage);
-    void updateDescriptorSets(uint32_t imageIndex);
+    void updateDescriptorSets(uint32_t imageIndex, uint32_t currentFrame);
 
    private:
     Device& m_device;
@@ -51,12 +49,4 @@ class ComputePipeline {
     VkCommandPool m_commandPool;
     std::vector<VkCommandBuffer> m_commandBuffers;
     VkDescriptorPool m_descriptorPool;
-
-    // sync
-    std::vector<VkSemaphore> m_imageAvailableSemaphores;
-    std::vector<VkSemaphore> m_renderFinishedSemaphores;
-    std::vector<VkFence> m_inFlightFences;
-
-    uint32_t m_currentFrame = 0;
-    bool m_framebufferResized = false;
 };

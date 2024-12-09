@@ -16,18 +16,17 @@ class GraphicsPipeline {
                      GLFWwindow* window);
     ~GraphicsPipeline();
 
-    void render();
-    void setFramebufferResized(bool resized) { m_framebufferResized = resized; }
+    void render(uint32_t imageIndex, uint32_t currentFrame);
+    VkCommandBuffer* getCurrentCommandBuffer(uint32_t currentFrame) {
+        return &m_commandBuffers[currentFrame];
+    }
 
    private:
     void initImGui();
-    void createRenderPass();
-    void createFramebuffers();
     void createCommandPool();
     void createCommandBuffers();
     void recordCommandBuffer(VkCommandBuffer commandBuffer,
                              uint32_t imageIndex);
-    void createSyncObjects();
 
    private:
     Device& m_device;
@@ -36,15 +35,6 @@ class GraphicsPipeline {
     GLFWwindow* m_window;
 
     VkDescriptorPool m_descriptorPool;
-    VkRenderPass m_renderPass = VK_NULL_HANDLE;
-    std::vector<VkFramebuffer> m_framebuffers;
     VkCommandPool m_commandPool;
     std::vector<VkCommandBuffer> m_commandBuffers;
-
-    std::vector<VkSemaphore> m_imageAvailableSemaphores;
-    std::vector<VkSemaphore> m_renderFinishedSemaphores;
-    std::vector<VkFence> m_inFlightFences;
-
-    bool m_framebufferResized = false;
-    uint32_t m_currentFrame = 0;
 };
