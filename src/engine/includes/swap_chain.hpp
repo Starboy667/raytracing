@@ -12,6 +12,7 @@ class SwapChain {
     const std::vector<VkImage>& images() const { return m_images; }
     const VkExtent2D& extent() const { return m_extent; }
     const VkSwapchainKHR& getSwapChain() const { return m_swapChain; }
+    uint32_t imageCount() const { return m_imageCount; }
     void recreateSwapChain();
 
    private:
@@ -34,4 +35,5 @@ class SwapChain {
     Device& m_device;
     VkSurfaceKHR m_surface;
     GLFWwindow* m_window;
+    uint32_t m_imageCount;
 };

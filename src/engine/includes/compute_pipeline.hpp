@@ -2,8 +2,6 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include <glm/glm.hpp>
-
 #include "device.hpp"
 #include "scene.hpp"
 #include "swap_chain.hpp"
@@ -13,6 +11,9 @@ class ComputePipeline {
     ~ComputePipeline();
     void render();
     void setFramebufferResized(bool resized) { m_framebufferResized = resized; }
+    VkSemaphore getCurrentRenderFinishedSemaphore() const {
+        return m_renderFinishedSemaphores[m_currentFrame];
+    }
 
    private:
     void createPipeline();
@@ -44,14 +45,10 @@ class ComputePipeline {
     std::vector<VkBuffer> m_sphereBuffers;
     std::vector<VkDeviceMemory> m_sphereBuffersMemory;
     std::vector<void*> m_sphereBuffersMapped;
-    // TODO: bouger
     const Scene& m_scene;
-    // const std::vector<Sphere>& m_spheres;
-    // const UniformBufferObject& m_camera;
 
     VkCommandPool m_commandPool;
     std::vector<VkCommandBuffer> m_commandBuffers;
-    // std::vector<VkCommandBuffer> m_computeCommandBuffers;
     VkDescriptorPool m_descriptorPool;
 
     // sync

@@ -20,20 +20,17 @@ void Application::Run() {
 }
 
 void Application::showFPS(GLFWwindow* pWindow) {
-    // Measure speed
     double currentTime = glfwGetTime();
     double delta = currentTime - lastTime;
     nbFrames++;
-    if (delta >= 1.0) {  // If last cout was more than 1 sec ago
+    if (delta >= 1.0) {
+        // If last cout was more than 1 sec ago
         // std::cout << 1000.0 / double(nbFrames) << std::endl;
 
         double fps = double(nbFrames) / delta;
-
         std::stringstream ss;
         ss << "Raytracer" << " " << " [" << fps << " FPS]";
-
         glfwSetWindowTitle(pWindow, ss.str().c_str());
-
         nbFrames = 0;
         lastTime = currentTime;
     }

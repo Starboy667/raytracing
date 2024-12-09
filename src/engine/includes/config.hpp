@@ -10,8 +10,6 @@ constexpr bool enableValidationLayers = true;
 
 // Other shared constants
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
-constexpr uint32_t WIDTH = 800;
-constexpr uint32_t HEIGHT = 600;
 
 // Validation layers
 const inline std::vector<const char*> validationLayers = {

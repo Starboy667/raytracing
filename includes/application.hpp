@@ -30,9 +30,7 @@ class Application {
 
    private:
     GLFWwindow* _window;
-    uint32_t currentFrame = 0;
+    Scene m_scene;
     double lastTime = 0.0f;
     size_t nbFrames = 0;
-
-    Scene m_scene;
 };

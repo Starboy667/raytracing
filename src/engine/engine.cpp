@@ -21,13 +21,21 @@ void Engine::initVulkan(Scene& scene) {
                                               m_instance->getSurface());
     m_computePipeline =
         std::make_unique<ComputePipeline>(*m_device, *m_swapChain, scene);
+    m_graphicsPipeline = std::make_unique<GraphicsPipeline>(
+        *m_device, *m_swapChain, *m_instance, m_window);
 }
 
 void Engine::cleanup() {
     vkDeviceWaitIdle(m_device->device());
     m_swapChain.reset();
     m_computePipeline.reset();
+    m_graphicsPipeline.reset();
     m_device.reset();
     glfwDestroyWindow(m_window);
     glfwTerminate();
+}
+
+void Engine::render() {
+    m_computePipeline->render();
+    // m_graphicsPipeline->render();
 }
