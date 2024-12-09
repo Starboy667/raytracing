@@ -1,0 +1,50 @@
+#pragma once
+#include <vulkan/vulkan.h>
+
+#include <optional>
+#include <vector>
+
+// Forward declarations
+// class Engine;  // Only if Device needs to know about Engine
+struct QueueFamilyIndices;
+struct SwapChainSupportDetails;
+
+class Device {
+   public:
+    Device(const VkInstance& instance, const VkSurfaceKHR& surface);
+    ~Device();
+
+    // Delete copy constructors
+    Device(const Device&) = delete;
+    Device& operator=(const Device&) = delete;
+
+    // Getters
+    VkDevice device() const { return m_device; }
+    VkPhysicalDevice physicalDevice() const { return m_physicalDevice; }
+    VkQueue graphicsQueue() const { return m_graphicsQueue; }
+    VkQueue computeQueue() const { return m_computeQueue; }
+    VkQueue presentQueue() const { return m_presentQueue; }
+
+    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
+
+   private:
+    void pickPhysicalDevice();
+    void createLogicalDevice();
+    bool isDeviceSuitable(VkPhysicalDevice device);
+    bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+
+   private:
+    // Core device-related objects
+    VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
+    VkDevice m_device;
+
+    // Queue handles (these are tied to the logical device)
+    VkQueue m_graphicsQueue;
+    VkQueue m_computeQueue;
+    VkQueue m_presentQueue;
+
+    // References to instance-level objects (owned by Engine)
+    VkInstance m_instance;   // Reference only
+    VkSurfaceKHR m_surface;  // Reference only
+};

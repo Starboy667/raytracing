@@ -1,5 +1,6 @@
 
-#include "instance.hpp"
+#include "includes/instance.hpp"
+#include "includes/config.hpp"
 
 std::vector<const char*> Engine::getRequiredExtensions() {
     uint32_t glfwExtensionCount = 0;
@@ -9,7 +10,7 @@ std::vector<const char*> Engine::getRequiredExtensions() {
     std::vector<const char*> extensions(glfwExtensions,
                                         glfwExtensions + glfwExtensionCount);
 
-    if (enableValidationLayers) {
+    if (config::enableValidationLayers) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
 
@@ -23,7 +24,7 @@ bool Engine::checkValidationLayerSupport() {
     std::vector<VkLayerProperties> availableLayers(layerCount);
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-    for (const char* layerName : validationLayers) {
+    for (const char* layerName : config::validationLayers) {
         bool layerFound = false;
 
         for (const auto& layerProperties : availableLayers) {
@@ -56,7 +57,7 @@ void Engine::populateDebugMessengerCreateInfo(
 }
 
 void Engine::createInstance() {
-    if (enableValidationLayers && !checkValidationLayerSupport()) {
+    if (config::enableValidationLayers && !checkValidationLayerSupport()) {
         throw std::runtime_error(
             "validation layers requested, but not available!");
     }
@@ -78,10 +79,10 @@ void Engine::createInstance() {
     createInfo.ppEnabledExtensionNames = extensions.data();
 
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
-    if (enableValidationLayers) {
+    if (config::enableValidationLayers) {
         createInfo.enabledLayerCount =
-            static_cast<uint32_t>(validationLayers.size());
-        createInfo.ppEnabledLayerNames = validationLayers.data();
+            static_cast<uint32_t>(config::validationLayers.size());
+        createInfo.ppEnabledLayerNames = config::validationLayers.data();
 
         populateDebugMessengerCreateInfo(debugCreateInfo);
         createInfo.pNext =
@@ -92,25 +93,25 @@ void Engine::createInstance() {
         createInfo.pNext = nullptr;
     }
 
-    if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
+    if (vkCreateInstance(&createInfo, nullptr, &m_instance) != VK_SUCCESS) {
         throw std::runtime_error("failed to create instance!");
     }
 }
 
 void Engine::setupDebugMessenger() {
-    if (!enableValidationLayers) return;
+    if (!config::enableValidationLayers) return;
 
     VkDebugUtilsMessengerCreateInfoEXT createInfo;
     populateDebugMessengerCreateInfo(createInfo);
 
-    if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr,
-                                     &debugMessenger) != VK_SUCCESS) {
+    if (CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr,
+                                     &m_debugMessenger) != VK_SUCCESS) {
         throw std::runtime_error("failed to set up debug messenger!");
     }
 }
 
 void Engine::createSurface() {
-    if (glfwCreateWindowSurface(instance, window, nullptr, &surface) !=
+    if (glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface) !=
         VK_SUCCESS) {
         throw std::runtime_error("failed to create window surface!");
     }

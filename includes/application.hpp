@@ -19,7 +19,7 @@ class Application {
                                           int height) {
         auto app =
             reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
-        app->_engine->SetFramebufferResized(true);
+        app->_engine->setFramebufferResized(true);
     }
 
    public:

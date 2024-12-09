@@ -67,7 +67,7 @@ RayHit Trace(Ray ray)
 {
     RayHit bestHit = CreateRayHit();
     IntersectSphere(ray, bestHit, vec4(0, 0.0f, 0, 1.0f));
-    // IntersectGroundPlane(ray, bestHit);
+    IntersectGroundPlane(ray, bestHit);
     return bestHit;
 }
 

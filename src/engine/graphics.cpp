@@ -1,6 +1,7 @@
-#include "graphics.hpp"
+#include "includes/graphics.hpp"
 
-#include "uniform.hpp"
+#include "includes/config.hpp"
+#include "includes/uniform.hpp"
 
 VkShaderModule Engine::createShaderModule(const std::vector<char>& code) {
     VkShaderModuleCreateInfo createInfo{};
@@ -9,8 +10,8 @@ VkShaderModule Engine::createShaderModule(const std::vector<char>& code) {
     createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
     VkShaderModule shaderModule;
-    if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) !=
-        VK_SUCCESS) {
+    if (vkCreateShaderModule(m_device->device(), &createInfo, nullptr,
+                             &shaderModule) != VK_SUCCESS) {
         throw std::runtime_error("failed to create shader module!");
     }
 
@@ -20,7 +21,8 @@ VkShaderModule Engine::createShaderModule(const std::vector<char>& code) {
 uint32_t Engine::findMemoryType(uint32_t typeFilter,
                                 VkMemoryPropertyFlags properties) {
     VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+    vkGetPhysicalDeviceMemoryProperties(m_device->physicalDevice(),
+                                        &memProperties);
     for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
         if ((typeFilter & (1 << i)) &&
             (memProperties.memoryTypes[i].propertyFlags & properties) ==
@@ -32,105 +34,41 @@ uint32_t Engine::findMemoryType(uint32_t typeFilter,
     throw std::runtime_error("failed to find suitable memory type!");
 }
 
-void Engine::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
-                          VkMemoryPropertyFlags properties, VkBuffer& buffer,
-                          VkDeviceMemory& bufferMemory) {
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create buffer!");
-    }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex =
-        findMemoryType(memRequirements.memoryTypeBits, properties);
-
-    if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) !=
-        VK_SUCCESS) {
-        throw std::runtime_error("failed to allocate buffer memory!");
-    }
-
-    vkBindBufferMemory(device, buffer, bufferMemory, 0);
-}
-
-void Engine::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer,
-                        VkDeviceSize size) {
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = commandPool;
-    allocInfo.commandBufferCount = 1;
-
-    VkCommandBuffer commandBuffer;
-    vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
-
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-    VkBufferCopy copyRegion{};
-    copyRegion.size = size;
-    vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-
-    vkEndCommandBuffer(commandBuffer);
-
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-
-    vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(graphicsQueue);
-
-    vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
-}
-
 void Engine::render() {
     // Wait for previous frame's compute work
-    vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE,
-                    UINT64_MAX);
-    vkResetFences(device, 1, &inFlightFences[currentFrame]);
-
+    vkWaitForFences(m_device->device(), 1, &m_inFlightFences[m_currentFrame],
+                    VK_TRUE, UINT64_MAX);
+    vkResetFences(m_device->device(), 1, &m_inFlightFences[m_currentFrame]);
     // Acquire next image
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(
-        device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame],
-        VK_NULL_HANDLE, &imageIndex);
+        m_device->device(), m_swapChain->getSwapChain(), UINT64_MAX,
+        m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE,
+        &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        recreateSwapChain();
+        m_swapChain->recreateSwapChain();
         return;
     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
         throw std::runtime_error("failed to acquire swap chain image!");
     }
 
-    updateUniformBuffer(currentFrame);
+    updateUniformBuffer(m_currentFrame);
 
     VkDescriptorImageInfo imageInfo{};
-    imageInfo.imageView = swapChainImageViews[imageIndex];
+    imageInfo.imageView = m_swapChain->imageViews()[imageIndex];
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     imageInfo.sampler = nullptr;
-    int i = currentFrame;
+    int i = m_currentFrame;
     // Storage Buffer descriptor for spheres (binding = 1)
     VkDescriptorBufferInfo sphereBufferInfo{};
-    sphereBufferInfo.buffer = sphereBuffers[i];
+    sphereBufferInfo.buffer = m_sphereBuffers[i];
     sphereBufferInfo.offset = 0;
-    sphereBufferInfo.range = sizeof(Sphere) * camera.sphereCount;
+    sphereBufferInfo.range = sizeof(Sphere) * m_camera.sphereCount;
 
     // Uniform Buffer descriptor (binding = 2)
     VkDescriptorBufferInfo uniformBufferInfo{};
-    uniformBufferInfo.buffer = uniformBuffers[i];
+    uniformBufferInfo.buffer = m_uniformBuffers[i];
     uniformBufferInfo.offset = 0;
     uniformBufferInfo.range = sizeof(UniformBufferObject);
 
@@ -138,7 +76,7 @@ void Engine::render() {
 
     // Storage Image (binding = 0)
     descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[0].dstSet = descriptorSets[i];
+    descriptorWrites[0].dstSet = m_descriptorSets[i];
     descriptorWrites[0].dstBinding = 0;
     descriptorWrites[0].dstArrayElement = 0;
     descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -147,7 +85,7 @@ void Engine::render() {
 
     // Sphere Storage Buffer (binding = 1)
     descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[1].dstSet = descriptorSets[i];
+    descriptorWrites[1].dstSet = m_descriptorSets[i];
     descriptorWrites[1].dstBinding = 1;
     descriptorWrites[1].dstArrayElement = 0;
     descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -156,20 +94,21 @@ void Engine::render() {
 
     // Uniform Buffer (binding = 2)
     descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[2].dstSet = descriptorSets[i];
+    descriptorWrites[2].dstSet = m_descriptorSets[i];
     descriptorWrites[2].dstBinding = 2;
     descriptorWrites[2].dstArrayElement = 0;
     descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     descriptorWrites[2].descriptorCount = 1;
     descriptorWrites[2].pBufferInfo = &uniformBufferInfo;
-    vkUpdateDescriptorSets(device,
+    vkUpdateDescriptorSets(m_device->device(),
                            static_cast<uint32_t>(descriptorWrites.size()),
                            descriptorWrites.data(), 0, nullptr);
     // Reset fence only after we're sure we'll submit work
 
     // Record compute command buffer
-    vkResetCommandBuffer(computeCommandBuffers[currentFrame], 0);
-    recordComputeCommandBuffer(computeCommandBuffers[currentFrame], imageIndex);
+    vkResetCommandBuffer(m_computeCommandBuffers[m_currentFrame], 0);
+    recordComputeCommandBuffer(m_computeCommandBuffers[m_currentFrame],
+                               imageIndex);
 
     // Set up compute submission
     VkPipelineStageFlags waitStages[] = {
@@ -178,39 +117,41 @@ void Engine::render() {
     VkSubmitInfo computeSubmitInfo{};
     computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     computeSubmitInfo.waitSemaphoreCount = 1;
-    computeSubmitInfo.pWaitSemaphores = &imageAvailableSemaphores[currentFrame];
+    computeSubmitInfo.pWaitSemaphores =
+        &m_imageAvailableSemaphores[m_currentFrame];
     computeSubmitInfo.pWaitDstStageMask = waitStages;
     computeSubmitInfo.commandBufferCount = 1;
-    computeSubmitInfo.pCommandBuffers = &computeCommandBuffers[currentFrame];
+    computeSubmitInfo.pCommandBuffers =
+        &m_computeCommandBuffers[m_currentFrame];
     computeSubmitInfo.signalSemaphoreCount = 1;
     computeSubmitInfo.pSignalSemaphores =
-        &renderFinishedSemaphores[currentFrame];
+        &m_renderFinishedSemaphores[m_currentFrame];
 
-    if (vkQueueSubmit(graphicsQueue, 1, &computeSubmitInfo,
-                      inFlightFences[currentFrame]) != VK_SUCCESS) {
+    if (vkQueueSubmit(m_device->computeQueue(), 1, &computeSubmitInfo,
+                      m_inFlightFences[m_currentFrame]) != VK_SUCCESS) {
         throw std::runtime_error("failed to submit compute command buffer!");
     }
     // Present
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &renderFinishedSemaphores[currentFrame];
+    presentInfo.pWaitSemaphores = &m_renderFinishedSemaphores[m_currentFrame];
     presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &swapChain;
+    presentInfo.pSwapchains = &m_swapChain->getSwapChain();
     presentInfo.pImageIndices = &imageIndex;
 
     try {
-        result = vkQueuePresentKHR(presentQueue, &presentInfo);
+        result = vkQueuePresentKHR(m_device->presentQueue(), &presentInfo);
     } catch (const std::exception& e) {
         printf("Error in vkQueuePresentKHR: %s\n", e.what());
     }
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
-        framebufferResized) {
-        framebufferResized = false;
-        recreateSwapChain();
+        m_framebufferResized) {
+        m_framebufferResized = false;
+        m_swapChain->recreateSwapChain();
     } else if (result != VK_SUCCESS) {
         throw std::runtime_error("failed to present swap chain image!");
     }
-    currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+    m_currentFrame = (m_currentFrame + 1) % config::MAX_FRAMES_IN_FLIGHT;
 }

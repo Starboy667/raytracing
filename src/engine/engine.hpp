@@ -14,27 +14,12 @@
 #include <iostream>
 #include <limits>
 #include <optional>
-#include <random>
 #include <set>
 #include <stdexcept>
 #include <vector>
 
-const uint32_t WIDTH = 800;
-const uint32_t HEIGHT = 600;
-
-const int MAX_FRAMES_IN_FLIGHT = 2;
-
-const std::vector<const char*> validationLayers = {
-    "VK_LAYER_KHRONOS_validation"};
-
-const std::vector<const char*> deviceExtensions = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-
-#ifdef NDEBUG
-const bool enableValidationLayers = false;
-#else
-const bool enableValidationLayers = true;
-#endif
+#include "includes/device.hpp"
+#include "includes/swap_chain.hpp"
 
 struct UniformBufferObject {
     alignas(16) glm::vec3 camera_forward;
@@ -73,23 +58,6 @@ inline void DestroyDebugUtilsMessengerEXT(
         func(instance, debugMessenger, pAllocator);
     }
 }
-
-struct QueueFamilyIndices {
-    std::optional<uint32_t> graphicsAndComputeFamily;
-    std::optional<uint32_t> presentFamily;
-
-    bool isComplete() {
-        return graphicsAndComputeFamily.has_value() &&
-               presentFamily.has_value();
-    }
-};
-
-struct SwapChainSupportDetails {
-    VkSurfaceCapabilitiesKHR capabilities;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR> presentModes;
-};
-
 struct Vertex {
     glm::vec2 pos;
     glm::vec3 color;
@@ -126,35 +94,28 @@ class Engine {
     Engine(uint32_t width, uint32_t height, GLFWwindow* window);
     ~Engine() { cleanup(); };
     void render();
-    void SetFramebufferResized(bool resized) { framebufferResized = resized; }
+    void setFramebufferResized(bool resized) { m_framebufferResized = resized; }
 
    private:
     void initVulkan();
-    void recreateSwapChain();
     void createInstance();
     void setupDebugMessenger();
     void createSurface();
-    void createLogicalDevice();
-    void createSwapChain();
-    void createImageViews();
     void createRenderPass();
     void createComputeDescriptorSetLayout();
     void createComputePipeline();
     void createCommandPool();
-
-    // void createDescriptorPool();
     void createComputeDescriptorSets();
     void createSyncObjects();
     void createComputeCommandBuffers();
-
     void createUniformBuffers();
-    void updateUniformBuffer(uint32_t currentImage);
     void createDescriptorSets();
     void createDescriptorPool();
 
+    void updateUniformBuffer(uint32_t currentImage);
+
     void recordComputeCommandBuffer(VkCommandBuffer commandBuffer,
                                     uint32_t imageIndex);
-    void cleanupSwapChain();
     void cleanup();
 
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
@@ -164,19 +125,10 @@ class Engine {
 
     void populateDebugMessengerCreateInfo(
         VkDebugUtilsMessengerCreateInfoEXT& createInfo);
-    void pickPhysicalDevice();
     VkShaderModule createShaderModule(const std::vector<char>& code);
-    VkSurfaceFormatKHR chooseSwapSurfaceFormat(
-        const std::vector<VkSurfaceFormatKHR>& availableFormats);
-    VkPresentModeKHR chooseSwapPresentMode(
-        const std::vector<VkPresentModeKHR>& availablePresentModes);
-    VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
-    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
-    bool isDeviceSuitable(VkPhysicalDevice device);
-    bool checkDeviceExtensionSupport(VkPhysicalDevice device);
-    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
-    std::vector<const char*> getRequiredExtensions();
+
     bool checkValidationLayerSupport();
+    std::vector<const char*> getRequiredExtensions();
     uint32_t findMemoryType(uint32_t typeFilter,
                             VkMemoryPropertyFlags properties);
     static std::vector<char> readFile(const std::string& filename) {
@@ -210,73 +162,59 @@ class Engine {
 
    private:
     // window
-    GLFWwindow* window;
+    GLFWwindow* m_window;
 
     // instance
-    VkInstance instance;
-    VkDebugUtilsMessengerEXT debugMessenger;
-    VkSurfaceKHR surface;
+    VkInstance m_instance;
+    VkDebugUtilsMessengerEXT m_debugMessenger;
+    VkSurfaceKHR m_surface;
 
-    // device
-    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-    VkDevice device;
-
-    // queue
-    VkQueue graphicsQueue;
-    VkQueue computeQueue;
-    VkQueue presentQueue;
-
-    // swap chain
-    VkSwapchainKHR swapChain;
-    std::vector<VkImage> swapChainImages;
-    VkFormat swapChainImageFormat;
-    VkExtent2D swapChainExtent;
-    std::vector<VkImageView> swapChainImageViews;
-    std::vector<VkFramebuffer> swapChainFramebuffers;
+    std::unique_ptr<Device> m_device;
+    std::unique_ptr<SwapChain> m_swapChain;
 
     // render pass
-    VkRenderPass renderPass;
-    VkPipelineLayout pipelineLayout;
-    VkPipeline graphicsPipeline;
+    VkRenderPass m_renderPass;
+    VkPipelineLayout m_pipelineLayout;
+    VkPipeline m_graphicsPipeline;
 
     // compute
-    VkDescriptorSetLayout computeDescriptorSetLayout;
-    VkPipelineLayout computePipelineLayout;
-    VkPipeline computePipeline;
+    VkDescriptorSetLayout m_computeDescriptorSetLayout;
+    VkPipelineLayout m_computePipelineLayout;
+    VkPipeline m_computePipeline;
 
-    VkCommandPool commandPool;
+    VkCommandPool m_commandPool;
 
     // sphere and scene buffer
-    std::vector<VkBuffer> sphereBuffers;
-    std::vector<VkDeviceMemory> sphereBuffersMemory;
-    std::vector<void*> sphereBuffersMapped;
+    std::vector<VkBuffer> m_sphereBuffers;
+    std::vector<VkDeviceMemory> m_sphereBuffersMemory;
+    std::vector<void*> m_sphereBuffersMapped;
 
-    std::vector<VkBuffer> uniformBuffers;
-    std::vector<VkDeviceMemory> uniformBuffersMemory;
-    std::vector<void*> uniformBuffersMapped;
+    std::vector<VkBuffer> m_uniformBuffers;
+    std::vector<VkDeviceMemory> m_uniformBuffersMemory;
+    std::vector<void*> m_uniformBuffersMapped;
 
     // command
-    std::vector<VkCommandBuffer> commandBuffers;
-    std::vector<VkCommandBuffer> computeCommandBuffers;
+    std::vector<VkCommandBuffer> m_commandBuffers;
+    std::vector<VkCommandBuffer> m_computeCommandBuffers;
 
     // descriptor
-    VkDescriptorPool descriptorPool;
-    std::vector<VkDescriptorSet> computeDescriptorSets;
+    VkDescriptorPool m_descriptorPool;
+    // std::vector<VkDescriptorSet> m_computeDescriptorSets;
 
     // sync
-    std::vector<VkSemaphore> imageAvailableSemaphores;
-    std::vector<VkSemaphore> renderFinishedSemaphores;
-    std::vector<VkFence> inFlightFences;
+    std::vector<VkSemaphore> m_imageAvailableSemaphores;
+    std::vector<VkSemaphore> m_renderFinishedSemaphores;
+    std::vector<VkFence> m_inFlightFences;
 
     // for uniforms
     // VkDescriptorPool descriptorPool;
-    std::vector<VkDescriptorSet> descriptorSets;
+    std::vector<VkDescriptorSet> m_descriptorSets;
     // ??
-    VkDescriptorSetLayout descriptorSetLayout;
-    uint32_t currentFrame = 0;
-    bool framebufferResized = false;
+    // VkDescriptorSetLayout m_descriptorSetLayout;
+    uint32_t m_currentFrame = 0;
+    bool m_framebufferResized = false;
 
     // TODO: bouger
-    std::vector<Sphere> spheres;
-    UniformBufferObject camera;
+    std::vector<Sphere> m_spheres;
+    UniformBufferObject m_camera;
 };
