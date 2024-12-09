@@ -77,8 +77,6 @@ void SwapChain::createRenderPass() {
     dependency.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     VkRenderPassCreateInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;

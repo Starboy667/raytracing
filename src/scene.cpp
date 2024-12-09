@@ -28,4 +28,4 @@ Scene::Scene() {
     }
 }
 
-Scene::~Scene() {}
+Scene::~Scene() { m_spheres.clear(); }

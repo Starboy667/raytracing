@@ -23,7 +23,7 @@ void Engine::initVulkan(Scene& scene) {
     m_computePipeline =
         std::make_unique<ComputePipeline>(*m_device, *m_swapChain, scene);
     m_graphicsPipeline = std::make_unique<GraphicsPipeline>(
-        *m_device, *m_swapChain, *m_instance, m_window);
+        *m_device, *m_swapChain, *m_instance, m_window, scene);
 }
 
 void Engine::cleanup() {

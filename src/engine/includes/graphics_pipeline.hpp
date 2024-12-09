@@ -10,10 +10,11 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+#include "scene.hpp"
 class GraphicsPipeline {
    public:
     GraphicsPipeline(Device& device, SwapChain& swapChain, Instance& instance,
-                     GLFWwindow* window);
+                     GLFWwindow* window, Scene& scene);
     ~GraphicsPipeline();
 
     void render(uint32_t imageIndex, uint32_t currentFrame);
@@ -34,6 +35,7 @@ class GraphicsPipeline {
     Instance& m_instance;
     GLFWwindow* m_window;
 
+    Scene& m_scene;
     VkDescriptorPool m_descriptorPool;
     VkCommandPool m_commandPool;
     std::vector<VkCommandBuffer> m_commandBuffers;

@@ -23,9 +23,7 @@ class Scene {
     ~Scene();
     const std::vector<Sphere>& spheres() const { return m_spheres; }
     const UniformBufferObject& camera() const { return m_camera; }
-    void update() {  }
-
-   private:
+    void update() {}
     std::vector<Sphere> m_spheres;
     UniformBufferObject m_camera;
 };

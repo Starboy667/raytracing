@@ -3,15 +3,15 @@
 #include <stdexcept>
 
 #include "../includes/config.hpp"
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_vulkan.h"
+
 GraphicsPipeline::GraphicsPipeline(Device& device, SwapChain& swapChain,
-                                   Instance& instance, GLFWwindow* window)
+                                   Instance& instance, GLFWwindow* window,
+                                   Scene& scene)
     : m_device(device),
       m_swapChain(swapChain),
       m_window(window),
-      m_instance(instance) {
+      m_instance(instance),
+      m_scene(scene) {
     createCommandPool();
     createCommandBuffers();
     initImGui();
@@ -91,12 +91,19 @@ void GraphicsPipeline::render(uint32_t imageIndex, uint32_t currentFrame) {
     ImGui::NewFrame();
 
     // Add your ImGui widgets here
+    if (config::show_demo_window)
+        ImGui::ShowDemoWindow(&config::show_demo_window);
     ImGui::Begin("Hello, ImGui!");
     ImGui::Text("This is an ImGui window");
+    ImGui::SliderFloat("camera.x", &m_scene.m_camera.camera_position.x, -10.0f,
+                       10.0f, "%.3f");
+    ImGui::SliderFloat("camera.y", &m_scene.m_camera.camera_position.y, -10.0f,
+                       10.0f, "%.3f");
+    ImGui::SliderFloat("camera.z", &m_scene.m_camera.camera_position.z, -10.0f,
+                       10.0f, "%.3f");
     ImGui::End();
 
     ImGui::Render();
-
     // Record command buffer
     vkResetCommandBuffer(m_commandBuffers[currentFrame], 0);
     recordCommandBuffer(m_commandBuffers[currentFrame], imageIndex);

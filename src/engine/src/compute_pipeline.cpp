@@ -293,8 +293,7 @@ void ComputePipeline::recordCommandBuffer(VkCommandBuffer commandBuffer,
 
 // TODO: make generic
 void ComputePipeline::createUniformBuffers() {
-    VkDeviceSize sphereBufferSize =
-        sizeof(Sphere) * m_scene.camera().sphereCount;
+    VkDeviceSize sphereBufferSize = sizeof(Sphere) * m_scene.spheres().size();
     m_sphereBuffers.resize(config::MAX_FRAMES_IN_FLIGHT);
     m_sphereBuffersMemory.resize(config::MAX_FRAMES_IN_FLIGHT);
     m_sphereBuffersMapped.resize(config::MAX_FRAMES_IN_FLIGHT);
@@ -327,7 +326,7 @@ void ComputePipeline::updateScene(uint32_t currentImage) {
     memcpy(m_uniformBuffersMapped[currentImage], &m_scene.camera(),
            sizeof(m_scene.camera()));
     memcpy(m_sphereBuffersMapped[currentImage], m_scene.spheres().data(),
-           m_scene.camera().sphereCount * sizeof(Sphere));
+           m_scene.spheres().size() * sizeof(Sphere));
 }
 
 void ComputePipeline::createDescriptorSets() {
