@@ -1,8 +1,21 @@
 
 #include "includes/instance.hpp"
+
 #include "includes/config.hpp"
 
-std::vector<const char*> Engine::getRequiredExtensions() {
+Instance::Instance(GLFWwindow* window) : m_window(window) {
+    createInstance();
+    setupDebugMessenger();
+    createSurface();
+}
+
+Instance::~Instance() {
+    DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
+    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+    vkDestroyInstance(m_instance, nullptr);
+}
+
+std::vector<const char*> Instance::getRequiredExtensions() {
     uint32_t glfwExtensionCount = 0;
     const char** glfwExtensions;
     glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
@@ -17,7 +30,7 @@ std::vector<const char*> Engine::getRequiredExtensions() {
     return extensions;
 }
 
-bool Engine::checkValidationLayerSupport() {
+bool Instance::checkValidationLayerSupport() {
     uint32_t layerCount;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
@@ -42,7 +55,7 @@ bool Engine::checkValidationLayerSupport() {
     return true;
 }
 
-void Engine::populateDebugMessengerCreateInfo(
+void Instance::populateDebugMessengerCreateInfo(
     VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
     createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -56,7 +69,7 @@ void Engine::populateDebugMessengerCreateInfo(
     createInfo.pfnUserCallback = debugCallback;
 }
 
-void Engine::createInstance() {
+void Instance::createInstance() {
     if (config::enableValidationLayers && !checkValidationLayerSupport()) {
         throw std::runtime_error(
             "validation layers requested, but not available!");
@@ -98,7 +111,7 @@ void Engine::createInstance() {
     }
 }
 
-void Engine::setupDebugMessenger() {
+void Instance::setupDebugMessenger() {
     if (!config::enableValidationLayers) return;
 
     VkDebugUtilsMessengerCreateInfoEXT createInfo;
@@ -110,7 +123,7 @@ void Engine::setupDebugMessenger() {
     }
 }
 
-void Engine::createSurface() {
+void Instance::createSurface() {
     if (glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface) !=
         VK_SUCCESS) {
         throw std::runtime_error("failed to create window surface!");

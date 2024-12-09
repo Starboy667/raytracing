@@ -1,46 +1,64 @@
+#include "includes/utils.hpp"
+
 #include "engine.hpp"
 
-void Engine::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
-                          VkMemoryPropertyFlags properties, VkBuffer& buffer,
-                          VkDeviceMemory& bufferMemory) {
+uint32_t findMemoryType(Device& device, uint32_t typeFilter,
+                        VkMemoryPropertyFlags properties) {
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(device.physicalDevice(),
+                                        &memProperties);
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        if ((typeFilter & (1 << i)) &&
+            (memProperties.memoryTypes[i].propertyFlags & properties) ==
+                properties) {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("failed to find suitable memory type!");
+}
+
+void createBuffer(Device& device, VkDeviceSize size, VkBufferUsageFlags usage,
+                  VkMemoryPropertyFlags properties, VkBuffer& buffer,
+                  VkDeviceMemory& bufferMemory) {
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
     bufferInfo.usage = usage;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateBuffer(m_device->device(), &bufferInfo, nullptr, &buffer) !=
+    if (vkCreateBuffer(device.device(), &bufferInfo, nullptr, &buffer) !=
         VK_SUCCESS) {
         throw std::runtime_error("failed to create buffer!");
     }
 
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_device->device(), buffer, &memRequirements);
+    vkGetBufferMemoryRequirements(device.device(), buffer, &memRequirements);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
     allocInfo.memoryTypeIndex =
-        findMemoryType(memRequirements.memoryTypeBits, properties);
+        findMemoryType(device, memRequirements.memoryTypeBits, properties);
 
-    if (vkAllocateMemory(m_device->device(), &allocInfo, nullptr,
-                         &bufferMemory) != VK_SUCCESS) {
+    if (vkAllocateMemory(device.device(), &allocInfo, nullptr, &bufferMemory) !=
+        VK_SUCCESS) {
         throw std::runtime_error("failed to allocate buffer memory!");
     }
 
-    vkBindBufferMemory(m_device->device(), buffer, bufferMemory, 0);
+    vkBindBufferMemory(device.device(), buffer, bufferMemory, 0);
 }
 
-void Engine::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer,
-                        VkDeviceSize size) {
+void copyBuffer(Device& device, VkCommandPool commandPool, VkBuffer srcBuffer,
+                VkBuffer dstBuffer, VkDeviceSize size) {
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = m_commandPool;
+    allocInfo.commandPool = commandPool;
     allocInfo.commandBufferCount = 1;
 
     VkCommandBuffer commandBuffer;
-    vkAllocateCommandBuffers(m_device->device(), &allocInfo, &commandBuffer);
+    vkAllocateCommandBuffers(device.device(), &allocInfo, &commandBuffer);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -59,26 +77,24 @@ void Engine::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer,
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffer;
 
-    vkQueueSubmit(m_device->graphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(m_device->graphicsQueue());
+    vkQueueSubmit(device.graphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(device.graphicsQueue());
 
-    vkFreeCommandBuffers(m_device->device(), m_commandPool, 1, &commandBuffer);
+    vkFreeCommandBuffers(device.device(), commandPool, 1, &commandBuffer);
 }
 
-static std::vector<char> readFile(const std::string& filename) {
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+VkShaderModule createShaderModule(VkDevice device,
+                                  const std::vector<char>& code) {
+    VkShaderModuleCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = code.size();
+    createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
-    if (!file.is_open()) {
-        throw std::runtime_error("failed to open file!");
+    VkShaderModule shaderModule;
+    if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) !=
+        VK_SUCCESS) {
+        throw std::runtime_error("failed to create shader module!");
     }
 
-    size_t fileSize = (size_t)file.tellg();
-    std::vector<char> buffer(fileSize);
-
-    file.seekg(0);
-    file.read(buffer.data(), fileSize);
-
-    file.close();
-
-    return buffer;
+    return shaderModule;
 }

@@ -35,7 +35,6 @@ class Device {
     bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
    private:
-    // Core device-related objects
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
     VkDevice m_device;
 
@@ -44,7 +43,6 @@ class Device {
     VkQueue m_computeQueue;
     VkQueue m_presentQueue;
 
-    // References to instance-level objects (owned by Engine)
-    VkInstance m_instance;   // Reference only
-    VkSurfaceKHR m_surface;  // Reference only
+    VkInstance m_instance;
+    VkSurfaceKHR m_surface;
 };

@@ -13,10 +13,6 @@ SwapChain::SwapChain(Device& device, GLFWwindow* window, VkSurfaceKHR surface)
 SwapChain::~SwapChain() { cleanupSwapChain(); }
 
 void SwapChain::cleanupSwapChain() {
-    // for (auto framebuffer : swapChainFramebuffers) {
-    //     vkDestroyFramebuffer(m_device.device(), framebuffer, nullptr);
-    // }
-
     for (auto imageView : m_imageViews) {
         vkDestroyImageView(m_device.device(), imageView, nullptr);
     }
@@ -33,9 +29,7 @@ void SwapChain::recreateSwapChain() {
     }
 
     vkDeviceWaitIdle(m_device.device());
-
     cleanupSwapChain();
-
     createSwapChain();
     createImageViews();
 }
