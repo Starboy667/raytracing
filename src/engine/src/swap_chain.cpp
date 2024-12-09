@@ -1,8 +1,8 @@
-#include "includes/swap_chain.hpp"
+#include "../includes/swap_chain.hpp"
 
 #include <stdexcept>
 
-#include "includes/device_structures.hpp"
+#include "../includes/device_structures.hpp"
 
 SwapChain::SwapChain(Device& device, GLFWwindow* window, VkSurfaceKHR surface)
     : m_device(device), m_window(window), m_surface(surface) {

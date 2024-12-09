@@ -1,11 +1,11 @@
-#include "includes/device.hpp"
+#include "../includes/device.hpp"
 
 #include <set>
 #include <stdexcept>
 #include <string>
 
-#include "includes/config.hpp"
-#include "includes/device_structures.hpp"
+#include "../includes/config.hpp"
+#include "../includes/device_structures.hpp"
 
 Device::Device(const VkInstance& instance, const VkSurfaceKHR& surface)
     : m_instance(instance), m_surface(surface) {

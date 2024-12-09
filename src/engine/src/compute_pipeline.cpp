@@ -1,37 +1,16 @@
-#include "includes/compute_pipeline.hpp"
+#include "../includes/compute_pipeline.hpp"
 
 #include <array>
 #include <iostream>
 
-#include "includes/config.hpp"
-#include "includes/device_structures.hpp"
-#include "includes/utils.hpp"
+#include "../includes/config.hpp"
+#include "../includes/device_structures.hpp"
+#include "../includes/scene.hpp"
+#include "../includes/utils.hpp"
 
-ComputePipeline::ComputePipeline(Device& device, SwapChain& swapChain)
-    : m_device(device), m_swapChain(swapChain) {
-    m_camera.camera_position =
-        glm::vec3(0.0f, 0.0f, -10.0f);                      // Move camera back
-    m_camera.camera_forward = glm::vec3(0.0f, 0.0f, 1.0f);  // Looking along +Z
-    m_camera.camera_right = glm::vec3(1.0f, 0.0f, 0.0f);    // Right along +X
-    m_camera.camera_up = glm::vec3(0.0f, 1.0f, 0.0f);
-    m_camera.sphereCount = 10;
-
-    m_spheres.reserve(m_camera.sphereCount);
-    for (int i = 0; i < m_camera.sphereCount; i++) {
-        float x = random_float(-5.0f, 5.0f);
-        float y = random_float(-5.0f, 5.0f);
-        float z = random_float(-5.0f, 5.0f);
-        float r = random_float();
-        float g = random_float();
-        float b = random_float();
-        float radius = random_float(0.5f, 3.0f);
-
-        Sphere sphere{};
-        sphere.center = glm::vec3(x, y, z);
-        sphere.radius = radius;
-        sphere.color = glm::vec3(r, g, b);
-        m_spheres.push_back(sphere);
-    }
+ComputePipeline::ComputePipeline(Device& device, SwapChain& swapChain,
+                                 Scene& scene)
+    : m_device(device), m_swapChain(swapChain), m_scene(scene) {
     createDescriptorSetLayout();
     createPipeline();
     createCommandPool();
@@ -319,7 +298,8 @@ void ComputePipeline::recordCommandBuffer(VkCommandBuffer commandBuffer,
 }
 
 void ComputePipeline::createUniformBuffers() {
-    VkDeviceSize sphereBufferSize = sizeof(Sphere) * m_camera.sphereCount;
+    VkDeviceSize sphereBufferSize =
+        sizeof(Sphere) * m_scene.camera().sphereCount;
     m_sphereBuffers.resize(config::MAX_FRAMES_IN_FLIGHT);
     m_sphereBuffersMemory.resize(config::MAX_FRAMES_IN_FLIGHT);
     m_sphereBuffersMapped.resize(config::MAX_FRAMES_IN_FLIGHT);
@@ -348,10 +328,11 @@ void ComputePipeline::createUniformBuffers() {
     }
 }
 
-void ComputePipeline::updateUniformBuffer(uint32_t currentImage) {
-    memcpy(m_uniformBuffersMapped[currentImage], &m_camera, sizeof(m_camera));
-    memcpy(m_sphereBuffersMapped[currentImage], m_spheres.data(),
-           m_camera.sphereCount * sizeof(Sphere));
+void ComputePipeline::updateScene(uint32_t currentImage) {
+    memcpy(m_uniformBuffersMapped[currentImage], &m_scene.camera(),
+           sizeof(m_scene.camera()));
+    memcpy(m_sphereBuffersMapped[currentImage], m_scene.spheres().data(),
+           m_scene.camera().sphereCount * sizeof(Sphere));
 }
 
 void ComputePipeline::render() {
@@ -373,7 +354,7 @@ void ComputePipeline::render() {
         throw std::runtime_error("failed to acquire swap chain image!");
     }
 
-    updateUniformBuffer(m_currentFrame);
+    updateScene(m_currentFrame);
 
     VkDescriptorImageInfo imageInfo{};
     imageInfo.imageView = m_swapChain.imageViews()[imageIndex];
@@ -384,7 +365,7 @@ void ComputePipeline::render() {
     VkDescriptorBufferInfo sphereBufferInfo{};
     sphereBufferInfo.buffer = m_sphereBuffers[i];
     sphereBufferInfo.offset = 0;
-    sphereBufferInfo.range = sizeof(Sphere) * m_camera.sphereCount;
+    sphereBufferInfo.range = sizeof(Sphere) * m_scene.camera().sphereCount;
 
     // Uniform Buffer descriptor (binding = 2)
     VkDescriptorBufferInfo uniformBufferInfo{};
@@ -500,7 +481,7 @@ void ComputePipeline::createDescriptorSets() {
         VkDescriptorBufferInfo sphereBufferInfo{};
         sphereBufferInfo.buffer = m_sphereBuffers[i];
         sphereBufferInfo.offset = 0;
-        sphereBufferInfo.range = sizeof(Sphere) * m_spheres.size();
+        sphereBufferInfo.range = sizeof(Sphere) * m_scene.spheres().size();
 
         // Uniform Buffer descriptor (binding = 2)
         VkDescriptorBufferInfo uniformBufferInfo{};

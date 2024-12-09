@@ -1,7 +1,7 @@
 
-#include "includes/instance.hpp"
+#include "../includes/instance.hpp"
 
-#include "includes/config.hpp"
+#include "../includes/config.hpp"
 
 Instance::Instance(GLFWwindow* window) : m_window(window) {
     createInstance();

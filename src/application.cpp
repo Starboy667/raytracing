@@ -4,7 +4,8 @@
 
 Application::Application(uint32_t width, uint32_t height, const char* name) {
     InitWindow(width, height, name);
-    _engine = std::make_unique<Engine>(width, height, _window);
+    m_scene = Scene();
+    _engine = std::make_unique<Engine>(width, height, _window, m_scene);
 }
 
 Application::~Application() {}
@@ -12,6 +13,7 @@ Application::~Application() {}
 void Application::Run() {
     while (!glfwWindowShouldClose(_window)) {
         glfwPollEvents();
+        m_scene.update();
         _engine->render();
         showFPS(_window);
     }

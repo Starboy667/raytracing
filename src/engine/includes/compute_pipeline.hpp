@@ -4,27 +4,12 @@
 
 #include <glm/glm.hpp>
 
-#include "includes/device.hpp"
-#include "includes/swap_chain.hpp"
-
-struct UniformBufferObject {
-    alignas(16) glm::vec3 camera_forward;
-    alignas(16) glm::vec3 camera_right;
-    alignas(16) glm::vec3 camera_up;
-    alignas(16) glm::vec3 camera_position;
-    alignas(4) int sphereCount;
-};
-
-struct Sphere {
-    alignas(16) glm::vec3 center;  // Aligned to 16 bytes
-    alignas(4) float radius;       // Aligned to 4 bytes
-    alignas(16) glm::vec3 color;   // Aligned to 16 bytes
-    alignas(4) float padding;      // Add padding to ensure 16-byte alignment
-};
-
+#include "device.hpp"
+#include "scene.hpp"
+#include "swap_chain.hpp"
 class ComputePipeline {
    public:
-    ComputePipeline(Device& device, SwapChain& swapChain);
+    ComputePipeline(Device& device, SwapChain& swapChain, Scene& scene);
     ~ComputePipeline();
     void render();
     void setFramebufferResized(bool resized) { m_framebufferResized = resized; }
@@ -40,7 +25,7 @@ class ComputePipeline {
     void createUniformBuffers();
     void recordCommandBuffer(VkCommandBuffer commandBuffer,
                              uint32_t imageIndex);
-    void updateUniformBuffer(uint32_t currentImage);
+    void updateScene(uint32_t currentImage);
 
    private:
     Device& m_device;
@@ -60,8 +45,9 @@ class ComputePipeline {
     std::vector<VkDeviceMemory> m_sphereBuffersMemory;
     std::vector<void*> m_sphereBuffersMapped;
     // TODO: bouger
-    std::vector<Sphere> m_spheres;
-    UniformBufferObject m_camera;
+    const Scene& m_scene;
+    // const std::vector<Sphere>& m_spheres;
+    // const UniformBufferObject& m_camera;
 
     VkCommandPool m_commandPool;
     std::vector<VkCommandBuffer> m_commandBuffers;

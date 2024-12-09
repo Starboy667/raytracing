@@ -8,9 +8,10 @@
 #include "includes/device.hpp"
 #include "includes/instance.hpp"
 #include "includes/swap_chain.hpp"
+
 class Engine {
    public:
-    Engine(uint32_t width, uint32_t height, GLFWwindow* window);
+    Engine(uint32_t width, uint32_t height, GLFWwindow* window, Scene& scene);
     ~Engine() { cleanup(); };
     void render() { m_computePipeline->render(); }
     void setFramebufferResized(bool resized) {
@@ -18,12 +19,11 @@ class Engine {
     }
 
    private:
-    void initVulkan();
+    void initVulkan(Scene& scene);
     void cleanup();
 
    private:
     GLFWwindow* m_window;
-
     std::unique_ptr<Instance> m_instance;
     std::unique_ptr<Device> m_device;
     std::unique_ptr<SwapChain> m_swapChain;

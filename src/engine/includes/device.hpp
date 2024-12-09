@@ -4,8 +4,6 @@
 #include <optional>
 #include <vector>
 
-// Forward declarations
-// class Engine;  // Only if Device needs to know about Engine
 struct QueueFamilyIndices;
 struct SwapChainSupportDetails;
 

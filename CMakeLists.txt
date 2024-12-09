@@ -9,7 +9,7 @@ project(raytracer)
 
 # Sources
 file(GLOB_RECURSE SOURCES src/*.cpp)
-file(GLOB_RECURSE HEADERS includes/*.hpp includes/*.h src/engine/includes/*.hpp)
+file(GLOB_RECURSE HEADERS includes/*.hpp includes/*.h)
 
 # Create the executable target first
 add_executable(raytracer ${SOURCES} ${HEADERS} ${PROJECT_SOURCE_DIR}/lib/ImGui/imgui_impl_glfw.cpp ${PROJECT_SOURCE_DIR}/lib/ImGui/imgui_impl_vulkan.cpp ${PROJECT_SOURCE_DIR}/lib/ImGui/imgui.cpp ${PROJECT_SOURCE_DIR}/lib/ImGui/imgui_draw.cpp ${PROJECT_SOURCE_DIR}/lib/ImGui/imgui_demo.cpp ${PROJECT_SOURCE_DIR}/lib/ImGui/imgui_tables.cpp ${PROJECT_SOURCE_DIR}/lib/ImGui/imgui_widgets.cpp)

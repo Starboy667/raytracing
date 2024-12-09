@@ -1,11 +1,14 @@
 #pragma once
 
-#include <memory>
+// #include <memory>
 
 #include "../src/engine/engine.hpp"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <random>
+
+#include "scene.hpp"
 class Application {
    public:
     Application(uint32_t width, uint32_t height, const char* name);
@@ -30,4 +33,6 @@ class Application {
     uint32_t currentFrame = 0;
     double lastTime = 0.0f;
     size_t nbFrames = 0;
+
+    Scene m_scene;
 };
