@@ -4,17 +4,17 @@ layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 #include "def.glsl"
 
 layout (binding = 0, rgba8) uniform image2D colorBuffer;
-
-layout(std140, binding = 1) readonly buffer sphereBuffer {
+layout (binding = 1, rgba32f) uniform image2D accumulationImage;
+layout (binding = 2) buffer sphereBuffer {  // Changed from uniform to buffer
     Sphere spheres[];
-} SphereData; 
-
-layout(std140, binding = 2) uniform UniformBufferObject {
+} SphereData;
+layout (binding = 3) uniform UniformBufferObject {  // This is correct
     vec3 camera_forward;
     vec3 camera_right;
     vec3 camera_up;
     vec3 camera_position;
     int sphereCount;
+    int frameCount;
 } SceneData;
 
 Ray CreateRay(vec3 origin, vec3 direction)
@@ -31,62 +31,79 @@ RayHit CreateRayHit()
     hit.position = vec3(0.0f, 0.0f, 0.0f);
     hit.distance = pos_infinity;
     hit.normal = vec3(0.0f, 0.0f, 0.0f);
+    hit.sphereIndex = -1;
     return hit;
 }
 
-void IntersectGroundPlane(Ray ray, out RayHit bestHit) {
-    // Calculate distance along the ray where the ground plane is intersected
-    float t = -ray.origin.y / ray.direction.y;
-    if (t > 0 && t < bestHit.distance)
-    {
-        bestHit.distance = t;
-        bestHit.position = ray.origin + t * ray.direction;
-        bestHit.normal = vec3(0.0f, 1.0f, 0.0f);
-    }
-}
-
-void IntersectSphere(Ray ray, inout RayHit bestHit, vec4 sphere)
+void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere)
 {
     // Calculate distance along the ray where the sphere is intersected
-    vec3 d = ray.origin - sphere.xyz;
-    float p1 = -dot(ray.direction, d);
-    float p2sqr = p1 * p1 - dot(d, d) + sphere.w * sphere.w;
-    if (p2sqr < 0)
-        return;
-    float p2 = sqrt(p2sqr);
-    float t = p1 - p2 > 0 ? p1 - p2 : p1 + p2;
-    if (t > 0 && t < bestHit.distance)
-    {
-        bestHit.distance = t;
-        bestHit.position = ray.origin + t * ray.direction;
-        bestHit.normal = normalize(bestHit.position - sphere.xyz);
-    }
+    // vec3 d = ray.origin - sphere.center;
+    // float p1 = -dot(ray.direction, d);
+    // float p2sqr = p1 * p1 - dot(d, d) + sphere.radius * sphere.radius;
+    // if (p2sqr < 0)
+    //     return;
+    // float p2 = sqrt(p2sqr);
+    // float t = p1 - p2 > 0 ? p1 - p2 : p1 + p2;
+    // if (t > 0 && t < bestHit.distance)
+    // {
+    //     bestHit.distance = t;
+    //     bestHit.position = ray.origin + t * ray.direction;
+    //     bestHit.normal = normalize(bestHit.position - sphere.center);
+    //     bestHit.color = sphere.color;
+    // }
+    // vec3 origin = ray.origin - sphere.center;
+    // float a = dot(ray.direction, ray.direction);
+    // float b = 2.0f * dot(origin, ray.direction);
+    // float c = dot(origin, origin) - sphere.radius * sphere.radius;
+    // float discriminant = b * b - 4.0f * a * c;
+    // if (discriminant < 0)
+    //     return;
+    // float closestD = (-b - sqrt(discriminant)) / (2.0f * a);
+    // if (closestD > 0 && closestD < bestHit.distance)
+    // {
+    //     bestHit.distance = closestD;
+    //     bestHit.position = ray.origin + closestD * ray.direction;
+    //     bestHit.normal = normalize(bestHit.position - sphere.center);
+    //     bestHit.color = sphere.color;
+    //     bestHit.sphereIndex = sphereIndex;
+    // }
 }
 
 RayHit Trace(Ray ray)
 {
     RayHit bestHit = CreateRayHit();
-    IntersectSphere(ray, bestHit, vec4(0, 0.0f, 0, 1.0f));
-    // IntersectGroundPlane(ray, bestHit);
+
+    for (int i = 0; i < SceneData.sphereCount; i++)
+    {
+        // IntersectSphere(ray, bestHit, SphereData.spheres[i]);
+        Sphere sphere = SphereData.spheres[i];
+        vec3 origin = ray.origin - sphere.center;
+        float a = dot(ray.direction, ray.direction);
+        float b = 2.0f * dot(origin, ray.direction);
+        float c = dot(origin, origin) - sphere.radius * sphere.radius;
+        float discriminant = b * b - 4.0f * a * c;
+        if (discriminant < 0.0f)
+            continue;
+        float closestD = (-b - sqrt(discriminant)) / (2.0f * a);
+        if (closestD > 0 && closestD < bestHit.distance)
+        {
+            bestHit.distance = closestD;
+            bestHit.position = ray.origin + closestD * ray.direction;
+            bestHit.normal = normalize(bestHit.position - sphere.center);
+            bestHit.color = sphere.color;
+            bestHit.sphereIndex = i;
+        }
+    }
     return bestHit;
 }
 
-vec3 Shade(inout Ray ray, RayHit hit)
-{
-    if (hit.distance < pos_infinity)
-    {
-        // Return the normal
-        return hit.normal * 0.5f + 0.5f;
-    }
-    else
-    {
-        // Sample the skybox and write it
-        // float theta = acos(ray.direction.y) / -M_PI;
-        // float phi = atan2(ray.direction.x, -ray.direction.z) / -M_PI * 0.5f;
-        // return _SkyboxTexture.SampleLevel(sampler_SkyboxTexture, float2(phi, theta), 0).xyz;
-        return vec3(0.2, 0.3, 0.5);
-    }
-}
+struct Material {
+    vec3 albedo;
+    float roughness;
+    // float metallic;
+    // float reflectivity;
+};
 
 void main() {
     ivec2 screen_pos = ivec2(gl_GlobalInvocationID.xy);
@@ -94,7 +111,10 @@ void main() {
     float horizontalCoefficient = ((float(screen_pos.x) * 2 - screen_size.x) / screen_size.x);
     float verticalCoefficient = ((float(screen_pos.y) * 2 - screen_size.y) / screen_size.x);
     vec3 pixel_color = vec3(0.0);
-
+    // clear accumulate buffer when frame count is 1
+    if (SceneData.frameCount == 1) {
+        imageStore(accumulationImage, screen_pos, vec4(0.0));
+    }
     Camera camera;
     camera.position = SceneData.camera_position;
     camera.forwards = SceneData.camera_forward;
@@ -105,7 +125,43 @@ void main() {
     ray.origin = camera.position;
     ray.direction = normalize(camera.forwards + horizontalCoefficient * camera.right + verticalCoefficient * camera.up);
     
-    RayHit hit = Trace(ray);
-    pixel_color = Shade(ray, hit);
-    imageStore(colorBuffer, screen_pos, vec4(pixel_color, 1.0));
+    vec3 light = vec3(0.0f);
+    vec3 contribution = vec3(0.4f);
+    for (int i = 0; i < 10; i++) {
+        RayHit bestHit = Trace(ray);
+        if (bestHit.distance < 0.0f || bestHit.sphereIndex == -1)
+        {
+            vec3 sky_color = vec3(0.6f, 0.7f, 0.9f);
+            light += sky_color * contribution;
+            break;
+        }
+        Sphere sphere = SphereData.spheres[bestHit.sphereIndex];
+        Material material = Material(sphere.color, 0.00f);
+
+        contribution *= material.albedo;
+        if (bestHit.sphereIndex == 0 || bestHit.sphereIndex == 1 || bestHit.sphereIndex == 2){
+            light += 5.0f * material.albedo;
+        }
+        // light += 2.0f * material.albedo;
+        // light += material.emission
+        ray.origin = bestHit.position + bestHit.normal * 0.0001f;
+        // ray.direction = normalize(bestHit.normal + normalize(rand_vec3(-1.0, 1.0, vec2(gl_GlobalInvocationID.xy + i))));
+        ray.direction = normalize(random_hemisphere_vector(
+            bestHit.normal, 
+            vec2(gl_GlobalInvocationID.xy), 
+            SceneData.frameCount, 
+            i
+        ));
+        // ray.direction = reflect(ray.direction, bestHit.normal + material.roughness * normalize(rand_vec3(-1.0, 1.0, vec2(gl_GlobalInvocationID.xy))));
+    }
+    // pixel_color = Shade(ray, hit);
+    // imageStore(colorBuffer, screen_pos, vec4(light, 1.0));
+
+    // imageStore(accumulationImage, screen_pos, vec4(light, 1.0));
+    vec4 accumulated = imageLoad(accumulationImage, screen_pos);
+    vec4 newAccumulated = vec4(light, 1.0) + accumulated;
+    imageStore(accumulationImage, screen_pos, newAccumulated);
+    vec3 finalColor = newAccumulated.rgb / float(SceneData.frameCount + 1);
+    finalColor = clamp(finalColor, 0.0f, 1.0f);
+    imageStore(colorBuffer, screen_pos, vec4(finalColor, 1.0));
 }

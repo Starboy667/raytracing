@@ -8,6 +8,7 @@ struct UniformBufferObject {
     alignas(16) glm::vec3 camera_up;
     alignas(16) glm::vec3 camera_position;
     alignas(4) int sphereCount;
+    alignas(4) uint32_t frameCount;
 };
 
 struct Sphere {
@@ -23,7 +24,7 @@ class Scene {
     ~Scene();
     const std::vector<Sphere>& spheres() const { return m_spheres; }
     const UniformBufferObject& camera() const { return m_camera; }
-    void update() {}
+    void update() { m_camera.frameCount++; }
     std::vector<Sphere> m_spheres;
     UniformBufferObject m_camera;
 };

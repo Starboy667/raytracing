@@ -74,22 +74,6 @@ void GraphicsPipeline::initImGui() {
 }
 
 void GraphicsPipeline::render(uint32_t imageIndex, uint32_t currentFrame) {
-    // vkWaitForFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame],
-    //                 VK_TRUE, UINT64_MAX);
-
-    // uint32_t imageIndex;
-    // VkResult result = vkAcquireNextImageKHR(
-    //     m_device.device(), m_swapChain.getSwapChain(), UINT64_MAX,
-    //     m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE,
-    //     &imageIndex);
-
-    // if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    //     // Handle swapchain recreation
-    //     return;
-    // }
-
-    // vkResetFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame]);
-    // Update ImGui UI
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -98,12 +82,22 @@ void GraphicsPipeline::render(uint32_t imageIndex, uint32_t currentFrame) {
         ImGui::ShowDemoWindow(&config::show_demo_window);
     ImGui::Begin("Hello, ImGui!");
     ImGui::Text("This is an ImGui window");
-    ImGui::SliderFloat("camera.x", &m_scene.m_camera.camera_position.x, -10.0f,
-                       10.0f, "%.3f");
-    ImGui::SliderFloat("camera.y", &m_scene.m_camera.camera_position.y, -10.0f,
-                       10.0f, "%.3f");
-    ImGui::SliderFloat("camera.z", &m_scene.m_camera.camera_position.z, -10.0f,
-                       10.0f, "%.3f");
+    // TODO: clean
+    float old_camera_position_x = m_scene.m_camera.camera_position.x;
+    float old_camera_position_y = m_scene.m_camera.camera_position.y;
+    float old_camera_position_z = m_scene.m_camera.camera_position.z;
+    float gap = 40.0f;
+    ImGui::SliderFloat("camera.x", &m_scene.m_camera.camera_position.x, -gap,
+                       gap, "%.3f");
+    ImGui::SliderFloat("camera.y", &m_scene.m_camera.camera_position.y, -gap,
+                       gap, "%.3f");
+    ImGui::SliderFloat("camera.z", &m_scene.m_camera.camera_position.z, -gap,
+                       gap, "%.3f");
+    if (old_camera_position_x != m_scene.m_camera.camera_position.x ||
+        old_camera_position_y != m_scene.m_camera.camera_position.y ||
+        old_camera_position_z != m_scene.m_camera.camera_position.z) {
+        m_scene.m_camera.frameCount = 0;
+    }
     ImGui::Separator();
     for (int i = 0; i < m_scene.spheres().size(); i++) {
         ImGui::PushID(i);
@@ -129,53 +123,8 @@ void GraphicsPipeline::render(uint32_t imageIndex, uint32_t currentFrame) {
         ImGui::UpdatePlatformWindows();
         ImGui::RenderPlatformWindowsDefault();
     }
-    // Record command buffer
     vkResetCommandBuffer(m_commandBuffers[currentFrame], 0);
     recordCommandBuffer(m_commandBuffers[currentFrame], imageIndex);
-
-    // Submit command buffer
-    // VkSubmitInfo submitInfo{};
-    // submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    // VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
-    // VkPipelineStageFlags waitStages[] = {
-    //     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    // submitInfo.waitSemaphoreCount = 1;
-    // submitInfo.pWaitSemaphores = waitSemaphores;
-    // submitInfo.pWaitDstStageMask = waitStages;
-    // submitInfo.commandBufferCount = 1;
-    // submitInfo.pCommandBuffers = &m_commandBuffers[currentFrame];
-
-    // VkSemaphore signalSemaphores[] = {renderFinishedSemaphore};
-    // submitInfo.signalSemaphoreCount = 1;
-    // submitInfo.pSignalSemaphores = signalSemaphores;
-
-    // if (vkQueueSubmit(m_device.graphicsQueue(), 1, &submitInfo,
-    //                   inFlightFence) != VK_SUCCESS) {
-    //     throw std::runtime_error("failed to submit draw command buffer!");
-    // }
-
-    // Present
-    // VkPresentInfoKHR presentInfo{};
-    // presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    // presentInfo.waitSemaphoreCount = 1;
-    // presentInfo.pWaitSemaphores = signalSemaphores;
-
-    // VkSwapchainKHR swapChains[] = {m_swapChain.getSwapChain()};
-    // presentInfo.swapchainCount = 1;
-    // presentInfo.pSwapchains = swapChains;
-    // presentInfo.pImageIndices = &imageIndex;
-    // VkResult result;
-
-    // result = vkQueuePresentKHR(m_device.presentQueue(), &presentInfo);
-
-    // if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
-    //     m_framebufferResized) {
-    //     m_framebufferResized = false;
-    // Handle swapchain recreation
-    // }
-
-    // m_currentFrame = (m_currentFrame + 1) % config::MAX_FRAMES_IN_FLIGHT;
 }
 
 GraphicsPipeline::~GraphicsPipeline() {

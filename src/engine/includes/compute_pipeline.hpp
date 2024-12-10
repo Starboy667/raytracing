@@ -22,10 +22,13 @@ class ComputePipeline {
     void createDescriptorPool();
     void createDescriptorSets();
     void createUniformBuffers();
+    void createAccumulationImage();
     void recordCommandBuffer(VkCommandBuffer commandBuffer,
                              uint32_t currentFrame, uint32_t imageIndex);
     void updateScene(uint32_t currentImage);
     void updateDescriptorSets(uint32_t imageIndex, uint32_t currentFrame);
+    VkCommandBuffer beginSingleTimeCommands();
+    void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 
    private:
     Device& m_device;
@@ -33,6 +36,11 @@ class ComputePipeline {
     VkDescriptorSetLayout m_descriptorSetLayout;
     VkPipelineLayout m_pipelineLayout;
     VkPipeline m_pipeline;
+
+    // accumulation image
+    VkImage m_accumulationImage;
+    VkDeviceMemory m_accumulationImageMemory;
+    VkImageView m_accumulationImageView;
 
     // uniforms
     std::vector<VkDescriptorSet> m_descriptorSets;

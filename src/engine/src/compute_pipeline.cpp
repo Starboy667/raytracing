@@ -14,6 +14,7 @@ ComputePipeline::ComputePipeline(Device& device, SwapChain& swapChain,
     createDescriptorSetLayout();
     createPipeline();
     createCommandPool();
+    createAccumulationImage();
     createUniformBuffers();
     createDescriptorPool();
     createDescriptorSets();
@@ -23,6 +24,16 @@ ComputePipeline::ComputePipeline(Device& device, SwapChain& swapChain,
 ComputePipeline::~ComputePipeline() {
     vkDestroyDescriptorSetLayout(m_device.device(), m_descriptorSetLayout,
                                  nullptr);
+    // Cleanup accumulation resources
+    if (m_accumulationImageView != VK_NULL_HANDLE) {
+        vkDestroyImageView(m_device.device(), m_accumulationImageView, nullptr);
+    }
+    if (m_accumulationImage != VK_NULL_HANDLE) {
+        vkDestroyImage(m_device.device(), m_accumulationImage, nullptr);
+    }
+    if (m_accumulationImageMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(m_device.device(), m_accumulationImageMemory, nullptr);
+    }
     // Add cleanup for uniform and sphere buffers
     for (size_t i = 0; i < config::MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroyBuffer(m_device.device(), m_uniformBuffers[i], nullptr);
@@ -149,16 +160,146 @@ void ComputePipeline::createCommandPool() {
     }
 }
 
+void ComputePipeline::createAccumulationImage() {
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.format =
+        VK_FORMAT_R32G32B32A32_SFLOAT;  // Use float for HDR accumulation
+    imageInfo.extent.width = m_swapChain.extent().width;
+    imageInfo.extent.height = m_swapChain.extent().height;
+    imageInfo.extent.depth = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.usage =
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    if (vkCreateImage(m_device.device(), &imageInfo, nullptr,
+                      &m_accumulationImage) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create accumulation image!");
+    }
+
+    // Allocate memory for the image
+    VkMemoryRequirements memRequirements;
+    vkGetImageMemoryRequirements(m_device.device(), m_accumulationImage,
+                                 &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex =
+        findMemoryType(m_device, memRequirements.memoryTypeBits,
+                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    if (vkAllocateMemory(m_device.device(), &allocInfo, nullptr,
+                         &m_accumulationImageMemory) != VK_SUCCESS) {
+        throw std::runtime_error(
+            "failed to allocate accumulation image memory!");
+    }
+
+    vkBindImageMemory(m_device.device(), m_accumulationImage,
+                      m_accumulationImageMemory, 0);
+
+    // Create image view
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = m_accumulationImage;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    if (vkCreateImageView(m_device.device(), &viewInfo, nullptr,
+                          &m_accumulationImageView) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create accumulation image view!");
+    }
+    VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = m_accumulationImage;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkPipelineStageFlags sourceStage;
+    VkPipelineStageFlags destinationStage;
+
+    if (VK_IMAGE_LAYOUT_UNDEFINED == VK_IMAGE_LAYOUT_UNDEFINED &&
+        VK_IMAGE_LAYOUT_GENERAL == VK_IMAGE_LAYOUT_GENERAL) {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask =
+            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+
+        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    }
+
+    vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0,
+                         nullptr, 0, nullptr, 1, &barrier);
+
+    endSingleTimeCommands(commandBuffer);
+}
+
+VkCommandBuffer ComputePipeline::beginSingleTimeCommands() {
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = m_commandPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer;
+    vkAllocateCommandBuffers(m_device.device(), &allocInfo, &commandBuffer);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    return commandBuffer;
+}
+
+void ComputePipeline::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    vkQueueSubmit(m_device.graphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(m_device.graphicsQueue());
+
+    vkFreeCommandBuffers(m_device.device(), m_commandPool, 1, &commandBuffer);
+}
+
 void ComputePipeline::createDescriptorPool() {
     std::array<VkDescriptorPoolSize, 3> poolSizes{};
+
+    // Storage Images (for both color and accumulation)
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    poolSizes[0].descriptorCount =
-        static_cast<uint32_t>(config::MAX_FRAMES_IN_FLIGHT);
-    // add sphere
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(
+        config::MAX_FRAMES_IN_FLIGHT);  // Two storage images per frame
+
+    // Storage Buffer (for spheres)
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     poolSizes[1].descriptorCount =
         static_cast<uint32_t>(config::MAX_FRAMES_IN_FLIGHT);
-    // add uniform
+
+    // Uniform Buffer (for scene data)
     poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSizes[2].descriptorCount =
         static_cast<uint32_t>(config::MAX_FRAMES_IN_FLIGHT);
@@ -168,6 +309,7 @@ void ComputePipeline::createDescriptorPool() {
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
     poolInfo.maxSets = static_cast<uint32_t>(config::MAX_FRAMES_IN_FLIGHT);
+    poolInfo.flags = 0;
 
     if (vkCreateDescriptorPool(m_device.device(), &poolInfo, nullptr,
                                &m_descriptorPool) != VK_SUCCESS) {
@@ -190,21 +332,35 @@ void ComputePipeline::createCommandBuffers() {
 }
 
 void ComputePipeline::createDescriptorSetLayout() {
-    std::array<VkDescriptorSetLayoutBinding, 3> layoutBindings{};
+    std::array<VkDescriptorSetLayoutBinding, 4> layoutBindings{};
+
+    // Binding 0: Output image (colorBuffer)
     layoutBindings[0].binding = 0;
     layoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     layoutBindings[0].descriptorCount = 1;
     layoutBindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-    // sphere
+    layoutBindings[0].pImmutableSamplers = nullptr;
+
+    // Binding 1: Accumulation image
     layoutBindings[1].binding = 1;
-    layoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    layoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     layoutBindings[1].descriptorCount = 1;
     layoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-    // uniform
+    layoutBindings[1].pImmutableSamplers = nullptr;
+
+    // Binding 2: Sphere buffer (SphereData)
     layoutBindings[2].binding = 2;
-    layoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    layoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     layoutBindings[2].descriptorCount = 1;
     layoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    layoutBindings[2].pImmutableSamplers = nullptr;
+
+    // Binding 3: Uniform buffer (SceneData)
+    layoutBindings[3].binding = 3;
+    layoutBindings[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    layoutBindings[3].descriptorCount = 1;
+    layoutBindings[3].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    layoutBindings[3].pImmutableSamplers = nullptr;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -225,69 +381,64 @@ void ComputePipeline::recordCommandBuffer(VkCommandBuffer commandBuffer,
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
     if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-        throw std::runtime_error(
-            "failed to begin recording compute command buffer!");
+        throw std::runtime_error("failed to begin recording command buffer!");
     }
 
-    // Transition image to GENERAL layout before compute dispatch
-    VkImageMemoryBarrier imageMemoryBarrier{};
-    imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-    imageMemoryBarrier.image = m_swapChain.images()[imageIndex];
-    imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    imageMemoryBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    imageMemoryBarrier.subresourceRange.baseMipLevel = 0;
-    imageMemoryBarrier.subresourceRange.levelCount = 1;
-    imageMemoryBarrier.subresourceRange.baseArrayLayer = 0;
-    imageMemoryBarrier.subresourceRange.layerCount = 1;
-
-    imageMemoryBarrier.srcAccessMask = VK_ACCESS_NONE_KHR;
-    imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    // 1. Transition swapchain image from PRESENT_SRC to GENERAL
+    VkImageMemoryBarrier presentToCompute{};
+    presentToCompute.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    presentToCompute.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    presentToCompute.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    presentToCompute.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    presentToCompute.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    presentToCompute.image = m_swapChain.images()[imageIndex];
+    presentToCompute.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    presentToCompute.subresourceRange.baseMipLevel = 0;
+    presentToCompute.subresourceRange.levelCount = 1;
+    presentToCompute.subresourceRange.baseArrayLayer = 0;
+    presentToCompute.subresourceRange.layerCount = 1;
+    presentToCompute.srcAccessMask = 0;
+    presentToCompute.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 
     vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0,
-                         nullptr, 1, &imageMemoryBarrier);
+                         nullptr, 1, &presentToCompute);
 
-    // Bind and dispatch the compute shader
+    // Bind pipeline and descriptor set
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                       m_pipeline);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                             m_pipelineLayout, 0, 1,
                             &m_descriptorSets[currentFrame], 0, nullptr);
 
+    // Dispatch compute shader
     vkCmdDispatch(commandBuffer,
                   static_cast<uint32_t>(m_swapChain.extent().width / 8),
                   static_cast<uint32_t>(m_swapChain.extent().height / 8), 1);
 
-    VkImageMemoryBarrier bob{};
-    // Transition the image back to PRESENT_SRC_KHR layout for presentation
-    bob.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    bob.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-    // bob.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    bob.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    bob.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    bob.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    bob.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    bob.dstAccessMask = VK_ACCESS_NONE_KHR;
-    bob.image = m_swapChain.images()[imageIndex];
-    bob.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    bob.subresourceRange.baseMipLevel = 0;
-    bob.subresourceRange.levelCount = 1;
-    bob.subresourceRange.baseArrayLayer = 0;
-    bob.subresourceRange.layerCount = 1;
+    // 2. Transition swapchain image to COLOR_ATTACHMENT_OPTIMAL for UI
+    // rendering
+    VkImageMemoryBarrier computeToGraphics{};
+    computeToGraphics.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    computeToGraphics.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    computeToGraphics.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    computeToGraphics.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    computeToGraphics.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    computeToGraphics.image = m_swapChain.images()[imageIndex];
+    computeToGraphics.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    computeToGraphics.subresourceRange.baseMipLevel = 0;
+    computeToGraphics.subresourceRange.levelCount = 1;
+    computeToGraphics.subresourceRange.baseArrayLayer = 0;
+    computeToGraphics.subresourceRange.layerCount = 1;
+    computeToGraphics.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    computeToGraphics.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
     vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0,
-                         nullptr, 0, nullptr, 1, &bob);
+                         nullptr, 0, nullptr, 1, &computeToGraphics);
 
-    try {
-        if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-            throw std::runtime_error(
-                "failed to record compute command buffer!");
-        }
-    } catch (std::runtime_error& e) {
-        printf("Error: %s\n", e.what());
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to record command buffer!");
     }
 }
 
@@ -351,6 +502,11 @@ void ComputePipeline::createDescriptorSets() {
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         imageInfo.sampler = nullptr;
 
+        // Accumulation buffer (binding = 1)
+        VkDescriptorImageInfo accumImageInfo{};
+        accumImageInfo.imageView = m_accumulationImageView;
+        accumImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
         // Storage Buffer descriptor for spheres (binding = 1)
         VkDescriptorBufferInfo sphereBufferInfo{};
         sphereBufferInfo.buffer = m_sphereBuffers[i];
@@ -363,7 +519,7 @@ void ComputePipeline::createDescriptorSets() {
         uniformBufferInfo.offset = 0;
         uniformBufferInfo.range = sizeof(UniformBufferObject);
 
-        std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
+        std::array<VkWriteDescriptorSet, 4> descriptorWrites{};
 
         // Storage Image (binding = 0)
         descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -374,23 +530,33 @@ void ComputePipeline::createDescriptorSets() {
         descriptorWrites[0].descriptorCount = 1;
         descriptorWrites[0].pImageInfo = &imageInfo;
 
-        // Sphere Storage Buffer (binding = 1)
+        // Accumulation buffer (binding = 1)
+
         descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[1].dstSet = m_descriptorSets[i];
         descriptorWrites[1].dstBinding = 1;
         descriptorWrites[1].dstArrayElement = 0;
-        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         descriptorWrites[1].descriptorCount = 1;
-        descriptorWrites[1].pBufferInfo = &sphereBufferInfo;
+        descriptorWrites[1].pImageInfo = &accumImageInfo;
 
-        // Uniform Buffer (binding = 2)
+        // Sphere Storage Buffer (binding = 1)
         descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[2].dstSet = m_descriptorSets[i];
         descriptorWrites[2].dstBinding = 2;
         descriptorWrites[2].dstArrayElement = 0;
-        descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptorWrites[2].descriptorCount = 1;
-        descriptorWrites[2].pBufferInfo = &uniformBufferInfo;
+        descriptorWrites[2].pBufferInfo = &sphereBufferInfo;
+
+        // Uniform Buffer (binding = 2)
+        descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[3].dstSet = m_descriptorSets[i];
+        descriptorWrites[3].dstBinding = 3;
+        descriptorWrites[3].dstArrayElement = 0;
+        descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrites[3].descriptorCount = 1;
+        descriptorWrites[3].pBufferInfo = &uniformBufferInfo;
 
         try {
             vkUpdateDescriptorSets(
@@ -407,121 +573,76 @@ void ComputePipeline::createDescriptorSets() {
 
 void ComputePipeline::updateDescriptorSets(uint32_t imageIndex,
                                            uint32_t currentFrame) {
-    VkDescriptorImageInfo imageInfo{};
-    imageInfo.imageView = m_swapChain.imageViews()[imageIndex];
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    imageInfo.sampler = nullptr;
-    int i = currentFrame;
-    // Storage Buffer descriptor for spheres (binding = 1)
-    VkDescriptorBufferInfo sphereBufferInfo{};
-    sphereBufferInfo.buffer = m_sphereBuffers[i];
-    sphereBufferInfo.offset = 0;
-    sphereBufferInfo.range = sizeof(Sphere) * m_scene.camera().sphereCount;
+    // Image descriptors for the color buffer
+    VkDescriptorImageInfo colorImageInfo{};
+    colorImageInfo.imageView = m_swapChain.imageViews()[imageIndex];
+    colorImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    colorImageInfo.sampler = nullptr;
 
-    // Uniform Buffer descriptor (binding = 2)
+    // Image descriptors for the accumulation buffer
+    VkDescriptorImageInfo accumImageInfo{};
+    accumImageInfo.imageView = m_accumulationImageView;
+    accumImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    // Buffer descriptor for the sphere data
+    VkDescriptorBufferInfo sphereBufferInfo{};
+    sphereBufferInfo.buffer = m_sphereBuffers[currentFrame];
+    sphereBufferInfo.offset = 0;
+    sphereBufferInfo.range = sizeof(Sphere) * m_scene.spheres().size();
+
+    // Buffer descriptor for the uniform data
     VkDescriptorBufferInfo uniformBufferInfo{};
-    uniformBufferInfo.buffer = m_uniformBuffers[i];
+    uniformBufferInfo.buffer = m_uniformBuffers[currentFrame];
     uniformBufferInfo.offset = 0;
     uniformBufferInfo.range = sizeof(UniformBufferObject);
 
-    std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
+    std::array<VkWriteDescriptorSet, 4> descriptorWrites{};
 
-    // Storage Image (binding = 0)
+    // Binding 0: Color buffer
     descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[0].dstSet = m_descriptorSets[i];
+    descriptorWrites[0].dstSet = m_descriptorSets[currentFrame];
     descriptorWrites[0].dstBinding = 0;
     descriptorWrites[0].dstArrayElement = 0;
     descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     descriptorWrites[0].descriptorCount = 1;
-    descriptorWrites[0].pImageInfo = &imageInfo;
+    descriptorWrites[0].pImageInfo = &colorImageInfo;
 
-    // Sphere Storage Buffer (binding = 1)
+    // Binding 1: Accumulation buffer
     descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[1].dstSet = m_descriptorSets[i];
+    descriptorWrites[1].dstSet = m_descriptorSets[currentFrame];
     descriptorWrites[1].dstBinding = 1;
     descriptorWrites[1].dstArrayElement = 0;
-    descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     descriptorWrites[1].descriptorCount = 1;
-    descriptorWrites[1].pBufferInfo = &sphereBufferInfo;
+    descriptorWrites[1].pImageInfo = &accumImageInfo;
 
-    // Uniform Buffer (binding = 2)
+    // Binding 2: Sphere buffer
     descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[2].dstSet = m_descriptorSets[i];
+    descriptorWrites[2].dstSet = m_descriptorSets[currentFrame];
     descriptorWrites[2].dstBinding = 2;
     descriptorWrites[2].dstArrayElement = 0;
-    descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     descriptorWrites[2].descriptorCount = 1;
-    descriptorWrites[2].pBufferInfo = &uniformBufferInfo;
+    descriptorWrites[2].pBufferInfo = &sphereBufferInfo;
+
+    // Binding 3: Uniform buffer
+    descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrites[3].dstSet = m_descriptorSets[currentFrame];
+    descriptorWrites[3].dstBinding = 3;
+    descriptorWrites[3].dstArrayElement = 0;
+    descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrites[3].descriptorCount = 1;
+    descriptorWrites[3].pBufferInfo = &uniformBufferInfo;
+
     vkUpdateDescriptorSets(m_device.device(),
                            static_cast<uint32_t>(descriptorWrites.size()),
                            descriptorWrites.data(), 0, nullptr);
 }
 
 void ComputePipeline::render(uint32_t imageIndex, uint32_t currentFrame) {
-    // vkWaitForFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame],
-    //                 VK_TRUE, UINT64_MAX);
-
-    // uint32_t imageIndex;
-    // VkResult result = vkAcquireNextImageKHR(
-    //     m_device.device(), m_swapChain.getSwapChain(), UINT64_MAX,
-    //     m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE,
-    //     &imageIndex);
-
-    // if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    //     m_swapChain.recreateSwapChain();
-    //     return;
-    // } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-    //     throw std::runtime_error("failed to acquire swap chain image!");
-    // }
-
-    // vkResetFences(m_device.device(), 1, &m_inFlightFences[m_currentFrame]);
-
     updateScene(currentFrame);
     updateDescriptorSets(imageIndex, currentFrame);
     vkResetCommandBuffer(m_commandBuffers[currentFrame], 0);
     recordCommandBuffer(m_commandBuffers[currentFrame], currentFrame,
                         imageIndex);
-
-    // VkPipelineStageFlags waitStages[] = {
-    //     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-
-    // VkSubmitInfo computeSubmitInfo{};
-    // computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    // computeSubmitInfo.waitSemaphoreCount = 1;
-    // computeSubmitInfo.pWaitSemaphores = &imageAvailableSemaphore;
-    // computeSubmitInfo.pWaitDstStageMask = waitStages;
-    // computeSubmitInfo.commandBufferCount = 1;
-    // computeSubmitInfo.pCommandBuffers = &m_commandBuffers[currentFrame];
-    // computeSubmitInfo.signalSemaphoreCount = 1;
-    // computeSubmitInfo.pSignalSemaphores = &renderFinishedSemaphore;
-
-    // if (vkQueueSubmit(m_device.computeQueue(), 1, &computeSubmitInfo,
-    //                   inFlightFence) != VK_SUCCESS) {
-    //     throw std::runtime_error("failed to submit compute command buffer!");
-    // }
-
-    // // Present
-    // VkPresentInfoKHR presentInfo{};
-    // presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    // presentInfo.waitSemaphoreCount = 1;
-    // presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
-    // presentInfo.swapchainCount = 1;
-    // presentInfo.pSwapchains = &m_swapChain.getSwapChain();
-    // presentInfo.pImageIndices = &imageIndex;
-
-    // VkResult result;
-    // try {
-    //     result = vkQueuePresentKHR(m_device.presentQueue(), &presentInfo);
-    // } catch (const std::exception& e) {
-    //     printf("Error in vkQueuePresentKHR: %s\n", e.what());
-    // }
-
-    // if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
-    //     m_framebufferResized) {
-    //     m_framebufferResized = false;
-    //     m_swapChain.recreateSwapChain();
-    // } else if (result != VK_SUCCESS) {
-    //     throw std::runtime_error("failed to present swap chain image!");
-    // }
-    // m_currentFrame = (m_currentFrame + 1) % config::MAX_FRAMES_IN_FLIGHT;
 }

@@ -3,7 +3,7 @@
 
 int main() {
     try {
-        Application app(800, 600, "Raytracing");
+        Application app(1280, 720, "Raytracing");
         app.Run();
     } catch (const std::exception& e) {
         printf("%s\n", e.what());

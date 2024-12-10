@@ -45,17 +45,14 @@ void Engine::cleanup() {
 }
 
 void Engine::render() {
-    // Wait for previous frame to complete
     vkWaitForFences(m_device->device(), 1, &m_inFlightFences[m_currentFrame],
                     VK_TRUE, UINT64_MAX);
 
-    // Acquire next image
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(
         m_device->device(), m_swapChain->getSwapChain(), UINT64_MAX,
-        m_imageAvailableSemaphores[m_currentFrame],  // Signal when image is
-                                                     // available
-        VK_NULL_HANDLE, &imageIndex);
+        m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE,
+        &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         m_swapChain->recreateSwapChain();
@@ -64,21 +61,21 @@ void Engine::render() {
         throw std::runtime_error("failed to acquire swap chain image!");
     }
 
-    // Reset fence only after we're sure we'll submit work
     vkResetFences(m_device->device(), 1, &m_inFlightFences[m_currentFrame]);
 
-    // Compute pass
-    m_computePipeline->render(imageIndex,
-                              m_currentFrame);  // Just record commands
+    // Record command buffers
+    m_computePipeline->render(imageIndex, m_currentFrame);
+    m_graphicsPipeline->render(imageIndex, m_currentFrame);
+
+    // Submit compute work
     VkSubmitInfo computeSubmitInfo{};
     computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     computeSubmitInfo.waitSemaphoreCount = 1;
     computeSubmitInfo.pWaitSemaphores =
         &m_imageAvailableSemaphores[m_currentFrame];
-    VkPipelineStageFlags computeWaitStage =
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    computeSubmitInfo.pWaitDstStageMask = &computeWaitStage;
-
+    VkPipelineStageFlags computeWaitStages[] = {
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
+    computeSubmitInfo.pWaitDstStageMask = computeWaitStages;
     computeSubmitInfo.commandBufferCount = 1;
     computeSubmitInfo.pCommandBuffers =
         m_computePipeline->getCurrentCommandBuffer(m_currentFrame);
@@ -91,17 +88,15 @@ void Engine::render() {
         throw std::runtime_error("failed to submit compute command buffer!");
     }
 
-    // // Graphics pass
+    // Submit graphics work
     VkSubmitInfo graphicsSubmitInfo{};
     graphicsSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     graphicsSubmitInfo.waitSemaphoreCount = 1;
     graphicsSubmitInfo.pWaitSemaphores =
         &m_renderFinishedSemaphores[m_currentFrame];
-    VkPipelineStageFlags graphicsWaitStage =
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    graphicsSubmitInfo.pWaitDstStageMask = &graphicsWaitStage;
-
-    m_graphicsPipeline->render(imageIndex, m_currentFrame);  // Just record
+    VkPipelineStageFlags graphicsWaitStages[] = {
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    graphicsSubmitInfo.pWaitDstStageMask = graphicsWaitStages;
     graphicsSubmitInfo.commandBufferCount = 1;
     graphicsSubmitInfo.pCommandBuffers =
         m_graphicsPipeline->getCurrentCommandBuffer(m_currentFrame);
