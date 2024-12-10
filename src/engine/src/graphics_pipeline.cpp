@@ -46,6 +46,10 @@ void GraphicsPipeline::initImGui() {
     // Initialize ImGui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
     ImGui_ImplGlfw_InitForVulkan(m_window, true);
 
     // Initialize ImGui for Vulkan
@@ -90,8 +94,7 @@ void GraphicsPipeline::render(uint32_t imageIndex, uint32_t currentFrame) {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    // Add your ImGui widgets here
-    if (config::show_demo_window)
+    if (config::show_demo_window == true)
         ImGui::ShowDemoWindow(&config::show_demo_window);
     ImGui::Begin("Hello, ImGui!");
     ImGui::Text("This is an ImGui window");
@@ -101,9 +104,31 @@ void GraphicsPipeline::render(uint32_t imageIndex, uint32_t currentFrame) {
                        10.0f, "%.3f");
     ImGui::SliderFloat("camera.z", &m_scene.m_camera.camera_position.z, -10.0f,
                        10.0f, "%.3f");
+    ImGui::Separator();
+    for (int i = 0; i < m_scene.spheres().size(); i++) {
+        ImGui::PushID(i);
+        char label[32];
+        sprintf_s(label, "Object number %d", i);
+        if (ImGui::CollapsingHeader(label)) {
+            // if (ImGui::CollapsingHeader("Object number %d", i)) {
+            ImGui::SliderFloat("sphere.x", &m_scene.m_spheres[i].center.x,
+                               -10.0f, 10.0f, "%.3f");
+            ImGui::SliderFloat("sphere.y", &m_scene.m_spheres[i].center.y,
+                               -10.0f, 10.0f, "%.3f");
+            ImGui::SliderFloat("sphere.z", &m_scene.m_spheres[i].center.z,
+                               -10.0f, 10.0f, "%.3f");
+        }
+        ImGui::PopID();
+    }
     ImGui::End();
 
     ImGui::Render();
+    ImGuiIO& io = ImGui::GetIO();
+
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+    }
     // Record command buffer
     vkResetCommandBuffer(m_commandBuffers[currentFrame], 0);
     recordCommandBuffer(m_commandBuffers[currentFrame], imageIndex);
