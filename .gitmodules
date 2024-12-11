@@ -1,0 +1,3 @@
+[submodule "lib/yaml_cpp"]
+	path = lib/yaml_cpp
+	url = git@github.com:Starboy667/yaml-cpp.git

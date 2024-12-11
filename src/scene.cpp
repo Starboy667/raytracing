@@ -3,12 +3,11 @@
 #include "utils.hpp"
 
 Scene::Scene() {
-    m_camera.camera_position =
-        glm::vec3(0.0f, 0.0f, -30.0f);                      // Move camera back
-    m_camera.camera_forward = glm::vec3(0.0f, 0.0f, 1.0f);  // Looking along +Z
-    m_camera.camera_right = glm::vec3(1.0f, 0.0f, 0.0f);    // Right along +X
+    m_camera.camera_position = glm::vec3(0.0f, 0.0f, -30.0f);
+    m_camera.camera_forward = glm::vec3(0.0f, 0.0f, 1.0f);
+    m_camera.camera_right = glm::vec3(1.0f, 0.0f, 0.0f);
     m_camera.camera_up = glm::vec3(0.0f, 1.0f, 0.0f);
-    m_camera.sphereCount = 20;
+    m_camera.sphereCount = 40;
     m_camera.frameCount = 0;
 
     m_spheres.reserve(m_camera.sphereCount);

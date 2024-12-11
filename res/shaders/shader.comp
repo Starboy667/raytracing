@@ -5,10 +5,10 @@ layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout (binding = 0, rgba8) uniform image2D colorBuffer;
 layout (binding = 1, rgba32f) uniform image2D accumulationImage;
-layout (binding = 2) buffer sphereBuffer {  // Changed from uniform to buffer
+layout (binding = 2) buffer sphereBuffer {
     Sphere spheres[];
 } SphereData;
-layout (binding = 3) uniform UniformBufferObject {  // This is correct
+layout (binding = 3) uniform UniformBufferObject {
     vec3 camera_forward;
     vec3 camera_right;
     vec3 camera_up;
@@ -35,48 +35,12 @@ RayHit CreateRayHit()
     return hit;
 }
 
-void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere)
-{
-    // Calculate distance along the ray where the sphere is intersected
-    // vec3 d = ray.origin - sphere.center;
-    // float p1 = -dot(ray.direction, d);
-    // float p2sqr = p1 * p1 - dot(d, d) + sphere.radius * sphere.radius;
-    // if (p2sqr < 0)
-    //     return;
-    // float p2 = sqrt(p2sqr);
-    // float t = p1 - p2 > 0 ? p1 - p2 : p1 + p2;
-    // if (t > 0 && t < bestHit.distance)
-    // {
-    //     bestHit.distance = t;
-    //     bestHit.position = ray.origin + t * ray.direction;
-    //     bestHit.normal = normalize(bestHit.position - sphere.center);
-    //     bestHit.color = sphere.color;
-    // }
-    // vec3 origin = ray.origin - sphere.center;
-    // float a = dot(ray.direction, ray.direction);
-    // float b = 2.0f * dot(origin, ray.direction);
-    // float c = dot(origin, origin) - sphere.radius * sphere.radius;
-    // float discriminant = b * b - 4.0f * a * c;
-    // if (discriminant < 0)
-    //     return;
-    // float closestD = (-b - sqrt(discriminant)) / (2.0f * a);
-    // if (closestD > 0 && closestD < bestHit.distance)
-    // {
-    //     bestHit.distance = closestD;
-    //     bestHit.position = ray.origin + closestD * ray.direction;
-    //     bestHit.normal = normalize(bestHit.position - sphere.center);
-    //     bestHit.color = sphere.color;
-    //     bestHit.sphereIndex = sphereIndex;
-    // }
-}
-
 RayHit Trace(Ray ray)
 {
     RayHit bestHit = CreateRayHit();
 
     for (int i = 0; i < SceneData.sphereCount; i++)
     {
-        // IntersectSphere(ray, bestHit, SphereData.spheres[i]);
         Sphere sphere = SphereData.spheres[i];
         vec3 origin = ray.origin - sphere.center;
         float a = dot(ray.direction, ray.direction);
@@ -128,7 +92,7 @@ void main() {
     vec3 light = vec3(0.0f);
     // vec3 contribution = vec3(0.0f);
     vec3 contribution = vec3(0.3f);
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 20; i++) {
         RayHit bestHit = Trace(ray);
         if (bestHit.distance < 0.0f || bestHit.sphereIndex == -1)
         {
@@ -156,14 +120,11 @@ void main() {
         //     i
         // ));
     }
-    // pixel_color = Shade(ray, hit);
-    // imageStore(colorBuffer, screen_pos, vec4(light, 1.0));
-
-    // imageStore(accumulationImage, screen_pos, vec4(light, 1.0));
     vec4 accumulated = imageLoad(accumulationImage, screen_pos);
     vec4 newAccumulated = vec4(light, 1.0) + accumulated;
     imageStore(accumulationImage, screen_pos, newAccumulated);
     vec3 finalColor = newAccumulated.rgb / float(SceneData.frameCount + 1);
-    finalColor = clamp(finalColor, 0.0f, 1.0f);
+    // clamp?
+    // finalColor = clamp(finalColor, 0.0f, 1.0f);
     imageStore(colorBuffer, screen_pos, vec4(finalColor, 1.0));
 }

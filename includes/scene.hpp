@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glm/glm.hpp>
+#include <glm.hpp>
 #include <vector>
 struct UniformBufferObject {
     alignas(16) glm::vec3 camera_forward;
