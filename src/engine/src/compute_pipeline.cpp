@@ -49,6 +49,21 @@ ComputePipeline::~ComputePipeline() {
     vkDestroyCommandPool(m_device.device(), m_commandPool, nullptr);
 }
 
+void ComputePipeline::windowResized() {
+    vkDeviceWaitIdle(m_device.device());
+    if (m_accumulationImageView != VK_NULL_HANDLE) {
+        vkDestroyImageView(m_device.device(), m_accumulationImageView, nullptr);
+    }
+    if (m_accumulationImage != VK_NULL_HANDLE) {
+        vkDestroyImage(m_device.device(), m_accumulationImage, nullptr);
+    }
+    if (m_accumulationImageMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(m_device.device(), m_accumulationImageMemory, nullptr);
+    }
+    createAccumulationImage();
+    m_scene.resetFrameCount();
+}
+
 void ComputePipeline::createPipeline() {
     // make shader
     auto computeShaderCode = readFile("../res/shaders/comp.spv");

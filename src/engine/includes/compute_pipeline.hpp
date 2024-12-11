@@ -13,6 +13,7 @@ class ComputePipeline {
     VkCommandBuffer* getCurrentCommandBuffer(uint32_t currentFrame) {
         return &m_commandBuffers[currentFrame];
     }
+    void windowResized();
 
    private:
     void createPipeline();
@@ -52,7 +53,7 @@ class ComputePipeline {
     std::vector<VkBuffer> m_sphereBuffers;
     std::vector<VkDeviceMemory> m_sphereBuffersMemory;
     std::vector<void*> m_sphereBuffersMapped;
-    const Scene& m_scene;
+    Scene& m_scene;
 
     VkCommandPool m_commandPool;
     std::vector<VkCommandBuffer> m_commandBuffers;

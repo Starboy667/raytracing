@@ -12,6 +12,7 @@ Scene::Scene() {
     YAML::Node scene = YAML::Load(file);
     m_spheres = scene["spheres"].as<std::vector<Sphere>>();
     m_camera = scene["camera"].as<UniformBufferObject>();
+    file.close();
 
     // m_camera.camera_position = glm::vec3(0.0f, 0.0f, -30.0f);
     // m_camera.camera_forward = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -46,6 +47,15 @@ Scene::Scene() {
     // m_spheres[2].color = glm::vec3(0.0f, 0.0f, 1.0f);
     // m_spheres[2].center = glm::vec3(-20.0f, 20.0f, 0.0f);
     // m_spheres[2].radius = 10.0f;
+}
+
+void Scene::reloadScene() {
+    std::ifstream file(std::filesystem::current_path().string() +
+                       "/../res/scenes/scene.yaml");
+    YAML::Node scene = YAML::Load(file);
+    m_spheres = scene["spheres"].as<std::vector<Sphere>>();
+    m_camera = scene["camera"].as<UniformBufferObject>();
+    file.close();
 }
 
 void Scene::save() {

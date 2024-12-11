@@ -1,10 +1,24 @@
 #pragma once
 
+// #ifdef _WIN32
+// #include <fileapi.h>
+// #include <synchapi.h>
+// #include <windows.h>
+// #endif
+// #include <Pathcch.h>
+// #include <shlwapi.h>
+// #include <stdio.h>
+// #include <stdlib.h>
+// #include <tchar.h>
+// #define WIN32_LEAN_AND_MEAN
+// #ifndef NOMINMAX
+// #define NOMINMAX
+// #endif
+
 #include <glm.hpp>
 #include <vector>
 
 #include "yaml-cpp/yaml.h"
-
 struct UniformBufferObject {
     alignas(16) glm::vec3 camera_forward;
     alignas(16) glm::vec3 camera_right;
@@ -89,7 +103,25 @@ class Scene {
     const std::vector<Sphere>& spheres() const { return m_spheres; }
     const UniformBufferObject& camera() const { return m_camera; }
     void update() { m_camera.frameCount++; }
+    void reloadScene();
+    void resetFrameCount() { m_camera.frameCount = 0; }
     void save();
+    // bool hasChanged(LPTSTR lpDir) {
+    //     DWORD dwWaitStatus;
+    //     HANDLE dwChangeHandles[1];
+    //     dwChangeHandles[0] = FindFirstChangeNotification(
+    //         lpDir,                          // directory to watch
+    //         FALSE,                          // do not watch subtree
+    //         FILE_NOTIFY_CHANGE_FILE_NAME);  // watch file name changes
+
+    //     if (dwChangeHandles[0] == INVALID_HANDLE_VALUE) {
+    //         printf("\n ERROR: FindFirstChangeNotification function
+    //         failed.\n"); ExitProcess(GetLastError());
+    //     }
+
+    //     dwWaitStatus =
+    //         WaitForMultipleObjects(2, dwChangeHandles, FALSE, INFINITE);
+    // }
     std::vector<Sphere> m_spheres;
     UniformBufferObject m_camera;
 };

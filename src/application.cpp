@@ -13,6 +13,9 @@ Application::~Application() { m_scene.save(); }
 void Application::Run() {
     while (!glfwWindowShouldClose(_window)) {
         glfwPollEvents();
+        if (glfwGetKey(_window, GLFW_KEY_R) == GLFW_PRESS) {
+            m_scene.reloadScene();
+        }
         m_scene.update();
         _engine->render();
         showFPS(_window);

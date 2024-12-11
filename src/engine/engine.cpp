@@ -124,6 +124,7 @@ void Engine::render() {
         m_framebufferResized) {
         m_framebufferResized = false;
         m_swapChain->recreateSwapChain();
+        m_computePipeline->windowResized();
     } else if (result != VK_SUCCESS) {
         throw std::runtime_error("failed to present swap chain image!");
     }
