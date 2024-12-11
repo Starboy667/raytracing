@@ -5,4 +5,8 @@
 - [X] Setup Render pipeline
 - [X] Add uniform
 - [X] Compute shaders
-- [ ] Setup ImGui 
+- [X] Setup ImGui 
+- [ ] Scene / hot reload
+- [ ] Fix resize
+- [ ] remove cmakepresets.json compiled shaders todo
+- [ ] add on doc git clone recursive
