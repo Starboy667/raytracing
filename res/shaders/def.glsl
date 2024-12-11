@@ -34,9 +34,7 @@ const highp float pos_infinity = 3.402823466e+38;
 //         43758.5453123);
 // }
 
-// vec3 rand_vec3(float min, float max, vec2 st) {
-//     return vec3(rand(st) * (max - min) + min, rand(st + vec2(1.0f, 0.0f)) * (max - min) + min, rand(st + vec2(0.0f, 1.0f)) * (max - min) + min);
-// }
+
 
 // PCG random number generator
 uint wang_hash(uint seed)
@@ -55,6 +53,12 @@ float rand(vec2 pixel_coord, int frame_number, int sample_index)
                 uint(frame_number) * 1920u * 1080u + 
                 uint(sample_index) * 1920u * 1080u * 256u;
     return float(wang_hash(seed)) / 4294967296.0;
+}
+
+vec3 rand_vec3(float min, float max, vec2 pixel_coord, int frame_number, int sample_index) {
+    return vec3(rand(pixel_coord, frame_number, sample_index) * (max - min) + min, 
+                rand(pixel_coord + vec2(1.0f, 0.0f), frame_number, sample_index) * (max - min) + min, 
+                rand(pixel_coord + vec2(0.0f, 1.0f), frame_number, sample_index) * (max - min) + min);
 }
 
 // Random vector on unit sphere

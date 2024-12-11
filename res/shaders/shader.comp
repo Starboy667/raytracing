@@ -126,7 +126,8 @@ void main() {
     ray.direction = normalize(camera.forwards + horizontalCoefficient * camera.right + verticalCoefficient * camera.up);
     
     vec3 light = vec3(0.0f);
-    vec3 contribution = vec3(0.4f);
+    // vec3 contribution = vec3(0.0f);
+    vec3 contribution = vec3(0.3f);
     for (int i = 0; i < 10; i++) {
         RayHit bestHit = Trace(ray);
         if (bestHit.distance < 0.0f || bestHit.sphereIndex == -1)
@@ -136,23 +137,24 @@ void main() {
             break;
         }
         Sphere sphere = SphereData.spheres[bestHit.sphereIndex];
-        Material material = Material(sphere.color, 0.00f);
+        Material material = Material(sphere.color, rand(vec2(gl_GlobalInvocationID.xy), SceneData.frameCount, i));
 
         contribution *= material.albedo;
         if (bestHit.sphereIndex == 0 || bestHit.sphereIndex == 1 || bestHit.sphereIndex == 2){
-            light += 5.0f * material.albedo;
+            light += 2.0f * material.albedo;
         }
         // light += 2.0f * material.albedo;
         // light += material.emission
         ray.origin = bestHit.position + bestHit.normal * 0.0001f;
         // ray.direction = normalize(bestHit.normal + normalize(rand_vec3(-1.0, 1.0, vec2(gl_GlobalInvocationID.xy + i))));
-        ray.direction = normalize(random_hemisphere_vector(
-            bestHit.normal, 
-            vec2(gl_GlobalInvocationID.xy), 
-            SceneData.frameCount, 
-            i
-        ));
-        // ray.direction = reflect(ray.direction, bestHit.normal + material.roughness * normalize(rand_vec3(-1.0, 1.0, vec2(gl_GlobalInvocationID.xy))));
+
+        ray.direction = reflect(ray.direction, bestHit.normal + material.roughness * normalize(rand_vec3(-1.0, 1.0, vec2(gl_GlobalInvocationID.xy), SceneData.frameCount, i)));
+        // ray.direction = normalize(random_hemisphere_vector(
+        //     bestHit.normal, 
+        //     vec2(gl_GlobalInvocationID.xy), 
+        //     SceneData.frameCount, 
+        //     i
+        // ));
     }
     // pixel_color = Shade(ray, hit);
     // imageStore(colorBuffer, screen_pos, vec4(light, 1.0));

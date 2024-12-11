@@ -87,6 +87,11 @@ void GraphicsPipeline::render(uint32_t imageIndex, uint32_t currentFrame) {
     float old_camera_position_y = m_scene.m_camera.camera_position.y;
     float old_camera_position_z = m_scene.m_camera.camera_position.z;
     float gap = 40.0f;
+    ImGui::Text("Accumulated frame count: %d", m_scene.m_camera.frameCount);
+    ImGui::Separator();
+    if (ImGui::Button("Reset frame count")) {
+        m_scene.m_camera.frameCount = 0;
+    }
     ImGui::SliderFloat("camera.x", &m_scene.m_camera.camera_position.x, -gap,
                        gap, "%.3f");
     ImGui::SliderFloat("camera.y", &m_scene.m_camera.camera_position.y, -gap,
@@ -114,6 +119,7 @@ void GraphicsPipeline::render(uint32_t imageIndex, uint32_t currentFrame) {
         }
         ImGui::PopID();
     }
+    ImGui::Separator();
     ImGui::End();
 
     ImGui::Render();

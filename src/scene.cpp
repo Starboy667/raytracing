@@ -27,15 +27,16 @@ Scene::Scene() {
         sphere.color = glm::vec3(r, g, b);
         m_spheres.push_back(sphere);
     }
-    m_spheres[0].color = glm::vec3(0.8f, 0.5f, 0.2f);
+    // m_spheres[0].color = glm::vec3(0.8f, 0.5f, 0.2f);
+    m_spheres[0].color = glm::vec3(1.0f, 0.0f, 0.0f);
     m_spheres[0].center = glm::vec3(0.0f, -20.0f, 0.0f);
     m_spheres[0].radius = 10.0f;
-    // m_spheres[1].color = glm::vec3(0.0f, 1.0f, 0.0f);
-    // m_spheres[1].center = glm::vec3(10.0f, 20.0f, 0.0f);
-    // m_spheres[1].radius = 10.0f;
-    // m_spheres[2].color = glm::vec3(0.0f, 0.0f, 1.0f);
-    // m_spheres[2].center = glm::vec3(-10.0f, 20.0f, 0.0f);
-    // m_spheres[2].radius = 10.0f;
+    m_spheres[1].color = glm::vec3(0.0f, 1.0f, 0.0f);
+    m_spheres[1].center = glm::vec3(20.0f, 20.0f, 0.0f);
+    m_spheres[1].radius = 10.0f;
+    m_spheres[2].color = glm::vec3(0.0f, 0.0f, 1.0f);
+    m_spheres[2].center = glm::vec3(-20.0f, 20.0f, 0.0f);
+    m_spheres[2].radius = 10.0f;
 }
 
 Scene::~Scene() { m_spheres.clear(); }
