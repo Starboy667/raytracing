@@ -17,7 +17,6 @@ set(ImGuiVulkan  ${PROJECT_SOURCE_DIR}/lib/ImGui/imgui_impl_glfw.cpp ${PROJECT_S
 add_executable(raytracer ${SOURCES} ${HEADERS} ${ImGuiVulkan})
 
 set_target_properties(raytracer PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
-
 target_include_directories(raytracer PUBLIC includes)
 
 if(MSVC)
@@ -26,10 +25,13 @@ if(MSVC)
     # Disable the MSVCRT conflict warning
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB:MSVCRT")
     # Add runtime library flags
+    add_compile_options(/W4 /WX)
     target_compile_options(raytracer PRIVATE 
         $<$<CONFIG:Debug>:/MDd>
         $<$<CONFIG:Release>:/MD>
     )
+else()
+    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 endif()
 
 # shaders
