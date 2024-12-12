@@ -1,13 +1,11 @@
 # Raytracer
 
-- [X] Setup Vulkan
-- [X] Setup base window with render
+- [X] Setup Window & Vulkan
 - [X] Setup Render pipeline
-- [X] Add uniform
+- [X] UBO
 - [X] Compute shaders
 - [X] Setup ImGui 
 - [X] Scene
-- [X] Fix resize
 - [ ] Update PBR rendering
 - [ ] Skybox
 - [ ] Update GUI
