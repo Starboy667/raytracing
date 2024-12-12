@@ -80,13 +80,13 @@ void GraphicsPipeline::render(uint32_t imageIndex, uint32_t currentFrame) {
 
     if (config::show_demo_window == true)
         ImGui::ShowDemoWindow(&config::show_demo_window);
-    ImGui::Begin("Hello, ImGui!");
-    ImGui::Text("This is an ImGui window");
+    ImGui::Begin("Raytracing");
+    ImGui::Text("Settings");
     // TODO: clean
     float old_camera_position_x = m_scene.m_camera.camera_position.x;
     float old_camera_position_y = m_scene.m_camera.camera_position.y;
     float old_camera_position_z = m_scene.m_camera.camera_position.z;
-    float gap = 40.0f;
+    float gap = 100.0f;
     ImGui::Text("Accumulated frame count: %d", m_scene.m_camera.frameCount);
     ImGui::Separator();
     if (ImGui::Button("Reset frame count")) {

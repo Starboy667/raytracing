@@ -91,8 +91,8 @@ void main() {
     
     vec3 light = vec3(0.0f);
     // vec3 contribution = vec3(0.0f);
-    vec3 contribution = vec3(0.3f);
-    for (int i = 0; i < 20; i++) {
+    vec3 contribution = vec3(0.15f);
+    for (int i = 0; i < 50; i++) {
         RayHit bestHit = Trace(ray);
         if (bestHit.distance < 0.0f || bestHit.sphereIndex == -1)
         {
@@ -101,7 +101,10 @@ void main() {
             break;
         }
         Sphere sphere = SphereData.spheres[bestHit.sphereIndex];
-        Material material = Material(sphere.color, rand(vec2(gl_GlobalInvocationID.xy), SceneData.frameCount, i));
+        // Material material = Material(sphere.color, rand(vec2(gl_GlobalInvocationID.xy), SceneData.frameCount, i));
+        float roughness = rand_vec3(0.0f, 0.02f, vec2(gl_GlobalInvocationID.xy), SceneData.frameCount, i).x;
+        Material material = Material(sphere.color, roughness);
+        // Material material = Material(sphere.color, 0.02f);
 
         contribution *= material.albedo;
         if (bestHit.sphereIndex == 0 || bestHit.sphereIndex == 1 || bestHit.sphereIndex == 2){

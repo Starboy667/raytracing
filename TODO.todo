@@ -10,7 +10,6 @@
 - [ ] Skybox
 - [ ] Update GUI
 - [X] Add mouse / keyboard input camera
-- [ ] remove cmakepresets.json compiled shaders todo
 - [ ] readme, add on doc git clone recursive
 - [ ] load obj
 - [ ] hot reload
