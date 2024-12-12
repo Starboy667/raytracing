@@ -14,10 +14,6 @@ Scene::Scene() {
     m_camera = scene["camera"].as<UniformBufferObject>();
     file.close();
 
-    // m_camera.camera_position = glm::vec3(0.0f, 0.0f, -30.0f);
-    // m_camera.camera_forward = glm::vec3(0.0f, 0.0f, 1.0f);
-    // m_camera.camera_right = glm::vec3(1.0f, 0.0f, 0.0f);
-    // m_camera.camera_up = glm::vec3(0.0f, 1.0f, 0.0f);
     // m_camera.sphereCount = 40;
     // m_camera.frameCount = 0;
 

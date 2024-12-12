@@ -6,7 +6,17 @@
 - [X] Add uniform
 - [X] Compute shaders
 - [X] Setup ImGui 
-- [ ] Scene / hot reload
-- [ ] Fix resize
+- [X] Scene
+- [X] Fix resize
+- [ ] Update PBR rendering
+- [ ] Skybox
+- [ ] Update GUI
+- [X] Add mouse / keyboard input camera
 - [ ] remove cmakepresets.json compiled shaders todo
-- [ ] add on doc git clone recursive
+- [ ] readme, add on doc git clone recursive
+- [ ] load obj
+- [ ] hot reload
+- [ ] implement acceleration structure, bvh perhaps?
+
+rasterize pipeline not needed to handle triangles
+bvh could be needed to handle objects

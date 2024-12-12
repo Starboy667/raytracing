@@ -96,32 +96,34 @@ struct convert<Sphere> {
 };
 }  // namespace YAML
 
+#include <iostream>
 class Scene {
    public:
     Scene();
     ~Scene();
     const std::vector<Sphere>& spheres() const { return m_spheres; }
     const UniformBufferObject& camera() const { return m_camera; }
-    void update() { m_camera.frameCount++; }
+    void update(float dt) {
+        m_camera.frameCount++;
+        glm::vec3 old_position = m_camera.camera_position;
+        velocity += acceleration * dt;
+        m_camera.camera_position += velocity * dt;
+        velocity = velocity * 0.98f;
+        acceleration = acceleration * 0.98f;
+        if (glm::length(old_position - m_camera.camera_position) > 0.01f) {
+            m_camera.frameCount = 1;
+        }
+    }
     void reloadScene();
     void resetFrameCount() { m_camera.frameCount = 0; }
     void save();
-    // bool hasChanged(LPTSTR lpDir) {
-    //     DWORD dwWaitStatus;
-    //     HANDLE dwChangeHandles[1];
-    //     dwChangeHandles[0] = FindFirstChangeNotification(
-    //         lpDir,                          // directory to watch
-    //         FALSE,                          // do not watch subtree
-    //         FILE_NOTIFY_CHANGE_FILE_NAME);  // watch file name changes
 
-    //     if (dwChangeHandles[0] == INVALID_HANDLE_VALUE) {
-    //         printf("\n ERROR: FindFirstChangeNotification function
-    //         failed.\n"); ExitProcess(GetLastError());
-    //     }
-
-    //     dwWaitStatus =
-    //         WaitForMultipleObjects(2, dwChangeHandles, FALSE, INFINITE);
-    // }
     std::vector<Sphere> m_spheres;
     UniformBufferObject m_camera;
+    float mouseSensitivity = 0.4f;
+    float movementSpeed = 100.0f;
+    glm::vec3 acceleration = glm::vec3(0.0f);
+    glm::vec3 velocity = glm::vec3(0.0f);
+    float yaw = 90.0f;
+    float pitch = 0.0f;
 };

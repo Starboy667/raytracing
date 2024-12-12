@@ -24,6 +24,7 @@ class Application {
             reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
         app->_engine->setFramebufferResized(true);
     }
+    void handleInput();
 
    public:
     std::unique_ptr<Engine> _engine;
@@ -31,6 +32,10 @@ class Application {
    private:
     GLFWwindow* _window;
     Scene m_scene;
+
+    glm::vec2 m_lastMousePosition = glm::vec2(0.0f);
+
+    float dt = 0.0f;
     double lastTime = 0.0f;
     size_t nbFrames = 0;
 };
