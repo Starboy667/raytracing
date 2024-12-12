@@ -27,10 +27,10 @@ _The project has only been tested on Windows_
 
 ## Features
 
-- [ x ] GPU Raytracing
-- [ x ] Accumulation image
-- [ x ] GUI
-- [ x ] Scene saving
+- [x] GPU Raytracing
+- [x] Accumulation image
+- [x] GUI
+- [x] Scene saving
 - [ ] Improved PBR
 - [ ] Loading .obj models
 - [ ] Skybox support
