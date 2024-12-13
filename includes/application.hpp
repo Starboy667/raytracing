@@ -38,4 +38,5 @@ class Application {
     float dt = 0.0f;
     double lastTime = 0.0f;
     size_t nbFrames = 0;
+    bool m_cursorEnabled = false;
 };

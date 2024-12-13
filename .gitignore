@@ -6,3 +6,4 @@ build/
 CMakeSettings.json
 .vscode/
 imagee.ppm
+res/shaders/comp.spv

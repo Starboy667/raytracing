@@ -24,6 +24,7 @@ _The project has only been tested on Windows_
 - `a`, `e` - move up and down
 - `r` - reset scene,
 - `left_click` - move camera around
+- `escape` - toggle cursor
 
 ## Features
 

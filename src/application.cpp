@@ -65,6 +65,12 @@ void Application::handleInput() {
         m_scene.acceleration +=
             m_scene.m_camera.camera_up * m_scene.movementSpeed;
     }
+    if (glfwGetKey(_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+        m_cursorEnabled = !m_cursorEnabled;
+        glfwSetInputMode(
+            _window, GLFW_CURSOR,
+            m_cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+    }
 
     // Mouse camera movement
     if (glfwGetMouseButton(_window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
@@ -123,5 +129,6 @@ void Application::InitWindow(uint32_t width, uint32_t height,
 
     _window = glfwCreateWindow(width, height, name, nullptr, nullptr);
     glfwSetWindowUserPointer(_window, this);
+    glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetFramebufferSizeCallback(_window, framebufferResizeCallback);
 }
