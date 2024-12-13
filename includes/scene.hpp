@@ -120,7 +120,7 @@ class Scene {
 
     std::vector<Sphere> m_spheres;
     UniformBufferObject m_camera;
-    float mouseSensitivity = 0.4f;
+    float mouseSensitivity = 0.25f;
     float movementSpeed = 100.0f;
     glm::vec3 acceleration = glm::vec3(0.0f);
     glm::vec3 velocity = glm::vec3(0.0f);

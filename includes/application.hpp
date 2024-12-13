@@ -39,4 +39,5 @@ class Application {
     double lastTime = 0.0f;
     size_t nbFrames = 0;
     bool m_cursorEnabled = false;
+    bool m_escapePressed = false;
 };

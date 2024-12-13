@@ -66,43 +66,55 @@ void Application::handleInput() {
             m_scene.m_camera.camera_up * m_scene.movementSpeed;
     }
     if (glfwGetKey(_window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+        m_escapePressed = true;
+    }
+    if (m_escapePressed &&
+        glfwGetKey(_window, GLFW_KEY_ESCAPE) == GLFW_RELEASE) {
         m_cursorEnabled = !m_cursorEnabled;
         glfwSetInputMode(
             _window, GLFW_CURSOR,
             m_cursorEnabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+        m_escapePressed = false;
     }
 
     // Mouse camera movement
-    if (glfwGetMouseButton(_window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-        glm::dvec2 mousePosition = glm::vec2(0.0f);
-        glfwGetCursorPos(_window, &mousePosition.x, &mousePosition.y);
-        glm::vec2 mouseDelta = (glm::vec2)mousePosition - m_lastMousePosition;
-        m_scene.yaw += mouseDelta.x * m_scene.mouseSensitivity;
-        m_scene.pitch += mouseDelta.y * m_scene.mouseSensitivity;
+    if (!m_cursorEnabled) {
+        if (glfwGetMouseButton(_window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+            glm::dvec2 mousePosition = glm::vec2(0.0f);
+            glfwGetCursorPos(_window, &mousePosition.x, &mousePosition.y);
+            glm::vec2 mouseDelta =
+                (glm::vec2)mousePosition - m_lastMousePosition;
+            m_scene.yaw += mouseDelta.x * m_scene.mouseSensitivity;
+            m_scene.pitch += mouseDelta.y * m_scene.mouseSensitivity;
 
-        // Clamp pitch to prevent the camera from flipping over
-        if (m_scene.pitch > 89.0f) m_scene.pitch = 89.0f;
-        if (m_scene.pitch < -89.0f) m_scene.pitch = -89.0f;
+            // Clamp pitch to prevent the camera from flipping over
+            if (m_scene.pitch > 89.0f) m_scene.pitch = 89.0f;
+            if (m_scene.pitch < -89.0f) m_scene.pitch = -89.0f;
 
-        m_scene.m_camera.camera_forward.x =
-            cos(glm::radians(m_scene.yaw)) * cos(glm::radians(m_scene.pitch));
-        m_scene.m_camera.camera_forward.y = sin(glm::radians(m_scene.pitch));
-        m_scene.m_camera.camera_forward.z =
-            sin(glm::radians(m_scene.yaw)) * cos(glm::radians(m_scene.pitch));
-        m_scene.m_camera.camera_forward =
-            glm::normalize(m_scene.m_camera.camera_forward);
+            m_scene.m_camera.camera_forward.x =
+                cos(glm::radians(m_scene.yaw)) *
+                cos(glm::radians(m_scene.pitch));
+            m_scene.m_camera.camera_forward.y =
+                sin(glm::radians(m_scene.pitch));
+            m_scene.m_camera.camera_forward.z =
+                sin(glm::radians(m_scene.yaw)) *
+                cos(glm::radians(m_scene.pitch));
+            m_scene.m_camera.camera_forward =
+                glm::normalize(m_scene.m_camera.camera_forward);
 
-        // Recalculate the right and up vectors to keep them orthogonal
-        m_scene.m_camera.camera_right = glm::normalize(glm::cross(
-            m_scene.m_camera.camera_forward, glm::vec3(0.0f, 1.0f, 0.0f)));
-        m_scene.m_camera.camera_up = glm::normalize(glm::cross(
-            m_scene.m_camera.camera_right, m_scene.m_camera.camera_forward));
-        m_lastMousePosition = mousePosition;
-        m_scene.m_camera.frameCount = 0;
+            // Recalculate the right and up vectors to keep them orthogonal
+            m_scene.m_camera.camera_right = glm::normalize(glm::cross(
+                m_scene.m_camera.camera_forward, glm::vec3(0.0f, 1.0f, 0.0f)));
+            m_scene.m_camera.camera_up =
+                glm::normalize(glm::cross(m_scene.m_camera.camera_right,
+                                          m_scene.m_camera.camera_forward));
+            m_lastMousePosition = mousePosition;
+            m_scene.m_camera.frameCount = 0;
+        }
+        glm::dvec3 tmp;
+        glfwGetCursorPos(_window, &tmp.x, &tmp.y);
+        m_lastMousePosition = glm::vec2(tmp.x, tmp.y);
     }
-    glm::dvec3 tmp;
-    glfwGetCursorPos(_window, &tmp.x, &tmp.y);
-    m_lastMousePosition = glm::vec2(tmp.x, tmp.y);
 }
 
 void Application::showFPS(GLFWwindow* pWindow) {
